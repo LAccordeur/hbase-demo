@@ -1,9 +1,6 @@
 package com.rogerguo.demo;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * @Author : guoyang
@@ -14,13 +11,14 @@ public class Store {
 
     private Map<String, Object> dataStore;
 
-    private Set<String> spatialIndex;
+    private Map<String, SpatialRange> spatialIndex;
 
     private int blockSize;
 
-    public Store() {
+    public Store(int blockSize) {
         this.dataStore = new HashMap<>();
-        this.blockSize = 10;
+        this.spatialIndex = new HashMap<>();
+        this.blockSize = blockSize;
     }
 
     public int getBlockSize() {
@@ -40,7 +38,38 @@ public class Store {
     }
 
     public void updateSpatialIndex() {
-        this.spatialIndex = dataStore.keySet();
+        Set<String> keySet = dataStore.keySet();
+
+        for (String key : keySet) {
+            int longitudeMin = Integer.MAX_VALUE;
+            int longitudeMax = Integer.MIN_VALUE;
+            int latitudeMin = Integer.MAX_VALUE;
+            int latitudeMax = Integer.MIN_VALUE;
+            SpatialRange range = new SpatialRange();
+            List records = (List) dataStore.get(key);
+            for (Object record : records) {
+                SpatialTemporalRecord spatialTemporalRecord = (SpatialTemporalRecord) record;
+                if (spatialTemporalRecord.getLongitude() > longitudeMax) {
+                    longitudeMax = spatialTemporalRecord.getLongitude();
+                }
+                if (spatialTemporalRecord.getLongitude() < longitudeMin) {
+                    longitudeMin = spatialTemporalRecord.getLongitude();
+                }
+                if (spatialTemporalRecord.getLatitude() > latitudeMax) {
+                    latitudeMax = spatialTemporalRecord.getLatitude();
+                }
+                if (spatialTemporalRecord.getLatitude() < latitudeMin) {
+                    latitudeMin = spatialTemporalRecord.getLatitude();
+                }
+            }
+            range.setLongitudeMin(longitudeMin);
+            range.setLongitudeMax(longitudeMax);
+            range.setLatitudeMin(latitudeMin);
+            range.setLatitudeMax(latitudeMax);
+
+            spatialIndex.put(key, range);
+        }
+
     }
 
     public Object getValue(String key) {
@@ -49,7 +78,16 @@ public class Store {
 
     public List<String> searchIndex(RangeQueryCommand command) {
 
+        List<String> result = new ArrayList<>();
+        Set<String> keySet = spatialIndex.keySet();
+        for (String key : keySet) {
+            SpatialRange range = spatialIndex.get(key);
+            if (range.isOverlap(new SpatialRange(command.getLongitudeMin(), command.getLongitudeMax(), command.getLatitudeMin(), command.getLatitudeMax()))) {
+                result.add(key);
+            }
 
-        return null;
+        }
+
+        return result;
     }
 }

@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * @Author : guoyang
- * @Description :
+ * @Description :  cache 中的数据仍是一数据点一记录，而store中的则是聚合之后的
  * @Date : Created on 2019/4/15
  */
 public class Server {
@@ -29,19 +29,21 @@ public class Server {
 
         //2.判断是否需要flush
         if (cache.isFlush()){
-            Store store = new Store();
+            Store store = new Store(4);
             cache.flush(store, temporalIndex);
             storeList.add(store);
         }
     }
 
-    public void scanData(RangeQueryCommand command) {
+    public List<SpatialTemporalRecord> scanData(RangeQueryCommand command) {
 
         List<SpatialTemporalRecord> result = new ArrayList<>();
 
         //1. 扫描缓存中的数据
-        List<SpatialTemporalRecord> cacheResult = cache.scan();
-
+        if (temporalIndex.checkCacheTemporalRange(command)) {
+            List<SpatialTemporalRecord> cacheResult = cache.scan(command);
+            result.addAll(cacheResult);
+        }
 
         //2. 检索时域索引表，查找哪些Store在这个时间段内
         List<Store> storeList = temporalIndex.searchIndex(command);
@@ -51,11 +53,11 @@ public class Server {
             List<String> keyList = store.searchIndex(command);
             for (String key : keyList) {
                 Object value = store.getValue(key);
-                DataUtil.parseGroupData(value);
+                DataUtil.parseGroupData(value, command, result);
             }
         }
 
-
+        return result;
     }
 
 }

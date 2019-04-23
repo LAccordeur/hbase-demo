@@ -1,9 +1,6 @@
 package com.rogerguo.demo;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @Author : guoyang
@@ -39,18 +36,36 @@ public class Cache {
      * flush时需要做的两件事，对数据按照区域进行分组，更新索引表
      * @param store
      */
-    public void flush(Store store, TemporalIndex index) {
+    public void flush(Store store, TemporalIndex temporalIndex) {
         //1. 进行数据分组
         Map<String, Object> resultData = DataUtil.groupSpatialData(cacheMap, store.getBlockSize());
         store.setDataStore(resultData);
 
         //2. 更新index
-        index.update(store);
+        temporalIndex.update(store);
         store.updateSpatialIndex();
+
+        //3. 清空缓存
+        cacheMap.clear();
     }
 
-    public List<SpatialTemporalRecord> scan() {
-        return null;
+    public List<SpatialTemporalRecord> scan(RangeQueryCommand command) {
+
+        List<SpatialTemporalRecord> resultList = new ArrayList<>();
+        Set<String> keySet = cacheMap.keySet();
+
+        for (String key : keySet) {
+            int[] point = DataUtil.unzordering(key);
+            int longitude = point[0];
+            int latitude = point[1];
+            if (latitude >= command.getLatitudeMin() && latitude <= command.getLatitudeMax()
+                    && longitude >= command.getLongitudeMin() && longitude >= command.getLongitudeMax()) {
+                resultList.add((SpatialTemporalRecord) cacheMap.get(key));
+            }
+
+        }
+
+        return resultList;
     }
 
     public int getCacheSize() {

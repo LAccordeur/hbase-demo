@@ -11,6 +11,13 @@ import static org.junit.Assert.*;
 
 public class DataUtilTest {
     @Test
+    public void unzordering() throws Exception {
+
+        DataUtil.unzordering("0000000000000000000000000000000000000000000000000000000000000110");
+
+    }
+
+    @Test
     public void groupSpatialData() throws Exception {
 
         Map<String, Object> map = new HashMap<>();
@@ -35,7 +42,7 @@ public class DataUtilTest {
         record.setLongitude(2);
         KeyValuePair pair = DataUtil.transferToKeyValuePair(record);
 
-        System.out.println(pair.getKey().length());
+        System.out.println(pair);
     }
 
 }

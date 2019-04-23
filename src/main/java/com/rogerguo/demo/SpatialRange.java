@@ -3,9 +3,9 @@ package com.rogerguo.demo;
 /**
  * @Author : guoyang
  * @Description :
- * @Date : Created on 2019/4/15
+ * @Date : Created on 2019/4/19
  */
-public class RangeQueryCommand {
+public class SpatialRange {
 
     private int longitudeMin;
 
@@ -15,20 +15,23 @@ public class RangeQueryCommand {
 
     private int latitudeMax;
 
-    private long timeMin;
-
-    private long timeMax;
-
-    public RangeQueryCommand() {
+    public boolean isOverlap(SpatialRange anotherRange) {
+        boolean isLongitudeOverlap = longitudeMax >= anotherRange.longitudeMin && longitudeMin <= anotherRange.longitudeMax;
+        boolean isLatitudeOverlap = latitudeMax >= anotherRange.latitudeMin && latitudeMin < anotherRange.latitudeMax;
+        if (isLongitudeOverlap && isLatitudeOverlap) {
+            return true;
+        }
+        return false;
     }
 
-    public RangeQueryCommand(int longitudeMin, int longitudeMax, int latitudeMin, int latitudeMax, long timeMin, long timeMax) {
+    public SpatialRange() {
+    }
+
+    public SpatialRange(int longitudeMin, int longitudeMax, int latitudeMin, int latitudeMax) {
         this.longitudeMin = longitudeMin;
         this.longitudeMax = longitudeMax;
         this.latitudeMin = latitudeMin;
         this.latitudeMax = latitudeMax;
-        this.timeMin = timeMin;
-        this.timeMax = timeMax;
     }
 
     public int getLongitudeMin() {
@@ -61,21 +64,5 @@ public class RangeQueryCommand {
 
     public void setLatitudeMax(int latitudeMax) {
         this.latitudeMax = latitudeMax;
-    }
-
-    public long getTimeMin() {
-        return timeMin;
-    }
-
-    public void setTimeMin(long timeMin) {
-        this.timeMin = timeMin;
-    }
-
-    public long getTimeMax() {
-        return timeMax;
-    }
-
-    public void setTimeMax(long timeMax) {
-        this.timeMax = timeMax;
     }
 }

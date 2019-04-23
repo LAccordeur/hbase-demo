@@ -1,8 +1,6 @@
 package com.rogerguo.demo;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @Author : guoyang
@@ -11,16 +9,39 @@ import java.util.Map;
  */
 public class TemporalIndex {
 
-    private Map<Long, Store> indexMap = new HashMap<>();
+    private Map<Long, Store> indexMap = new LinkedHashMap<>();
 
+    private long lastTimestamp;
 
     public void update(Store store) {
-        indexMap.put(System.currentTimeMillis(), store);
+        long currentTimestamp = System.currentTimeMillis();
+        indexMap.put(currentTimestamp, store);
+        lastTimestamp = currentTimestamp;
     }
 
     public List<Store> searchIndex(RangeQueryCommand command) {
+        long timeMin = command.getTimeMin();
+        long timeMax = command.getTimeMax();
 
-        return null;
+        List<Store> result = new ArrayList<>();
+        Set<Long> keySet = indexMap.keySet();
+        for (Long key : keySet) {
+            if (key >= timeMin && key <= timeMax) {
+                result.add(indexMap.get(key));
+            }
+        }
+
+        return result;
     }
 
+    public boolean checkCacheTemporalRange(RangeQueryCommand command) {
+
+        long timeMax = command.getTimeMax();
+
+        if (timeMax > lastTimestamp) {
+            return true;
+        }
+
+        return false;
+    }
 }

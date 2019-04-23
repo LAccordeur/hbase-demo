@@ -16,6 +16,25 @@ public class SpatialTemporalRecord {
 
     private String data;
 
+    public SpatialTemporalRecord() {
+    }
+
+    public SpatialTemporalRecord(int latitude, int longitude, long timestamp, String data) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.timestamp = timestamp;
+        this.data = data;
+    }
+
+    @Override
+    public String toString() {
+        return "SpatialTemporalRecord{" +
+                "latitude=" + latitude +
+                ", longitude=" + longitude +
+                ", timestamp=" + timestamp +
+                ", data='" + data + '\'' +
+                '}';
+    }
 
     public int getLatitude() {
         return latitude;
