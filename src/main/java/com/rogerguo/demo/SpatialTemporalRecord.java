@@ -7,6 +7,7 @@ package com.rogerguo.demo;
  */
 public class SpatialTemporalRecord {
 
+    private int id;
 
     private int latitude;
 
@@ -16,8 +17,11 @@ public class SpatialTemporalRecord {
 
     private String data;
 
+    private Object object;
+
     public SpatialTemporalRecord() {
     }
+
 
     public SpatialTemporalRecord(int latitude, int longitude, long timestamp, String data) {
         this.latitude = latitude;
@@ -34,6 +38,22 @@ public class SpatialTemporalRecord {
                 ", timestamp=" + timestamp +
                 ", data='" + data + '\'' +
                 '}';
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public Object getObject() {
+        return object;
+    }
+
+    public void setObject(Object object) {
+        this.object = object;
     }
 
     public int getLatitude() {
