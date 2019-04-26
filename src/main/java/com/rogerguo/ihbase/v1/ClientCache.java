@@ -23,12 +23,14 @@ public class ClientCache {
 
     private Index index;
 
-    private static String FAMILY = "info";
+
     public ClientCache(String zookeeperUrl, int cacheSize, int serverBlockSize) {
         this.cacheMap = new HashMap<>();
         this.cacheSize = cacheSize;
         this.serverBlockSize = serverBlockSize;
         this.server = new HBaseUtils(zookeeperUrl);
+
+        this.index = new Index(zookeeperUrl);
     }
 
     public void append(KeyValuePair data) {
@@ -51,50 +53,43 @@ public class ClientCache {
     public void flush() {
         //1. 进行数据分组
         Map<String, Object> resultData = DataUtil.groupSpatialData(cacheMap, this.serverBlockSize);
-        sendToServer(resultData);
 
         //2. 更新index
-        index.update(resultData);
+        Long[] currentTimeIndex = index.update(resultData);
+        sendToServer(resultData, currentTimeIndex);
 
         //3. 清空缓存
         cacheMap.clear();
     }
 
-    private void sendToServer(Map<String, Object> dataMap) {
+    private void sendToServer(Map<String, Object> dataMap, Long[] currentTimeIndex) {
         //key -> 子区域id     value -> 该子区域内的数据点list
         //将数据解析成HBase Put对象，并调用HBase API写入HBase
         Set<String> keySet = dataMap.keySet();
         List<Put> putList = new ArrayList<>();
         for (String key : keySet) {
-            String rowkey = generateKey(key);
+            String rowkey = generateKey(key, currentTimeIndex);
             Put put = new Put(Bytes.toBytes(rowkey));
 
             List valueList = (List) dataMap.get(key);
             for (Object record : valueList) {
                 SpatialTemporalRecord spatialTemporalRecord = (SpatialTemporalRecord) record;
-                put.addColumn(Bytes.toBytes(FAMILY), Bytes.toBytes(spatialTemporalRecord.getId()), Bytes.toBytes(spatialTemporalRecord.toString()));
+                put.addColumn(Bytes.toBytes(Client.DATA_FAMILY), Bytes.toBytes(spatialTemporalRecord.getId()), Bytes.toBytes(spatialTemporalRecord.toString()));
             }
         }
         server.putBatch(Client.DATA_TABLE, putList);
 
     }
 
-    private String generateKey(String key) {
-        Result result = index.getLastIndexInfo();
-        result.getFamilyMap(Bytes.toBytes(Index.INDEX_FAMILY));
+    public static String generateKey(String spatialKey, Long[] currentTimeIndex) {
 
-        //TODO
-        long lastIndexKey = 0;
+        long lastIndexKey = currentTimeIndex[0];
+        long lastColumnKey = currentTimeIndex[1];
 
         StringBuilder stringBuilder = new StringBuilder();
-        if ((System.currentTimeMillis() - lastIndexKey) < Index.TIME_PERIOD) {
-            stringBuilder.append(lastIndexKey);
-        } else {
-            stringBuilder.append(lastIndexKey + Index.TIME_PERIOD);
-        }
-        stringBuilder.append(System.currentTimeMillis());
-        stringBuilder.append(key);
-
+        stringBuilder.append(lastIndexKey);
+        stringBuilder.append(lastColumnKey);
+        stringBuilder.append(spatialKey);
 
         return stringBuilder.toString();
     }

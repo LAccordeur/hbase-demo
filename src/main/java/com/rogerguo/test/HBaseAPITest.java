@@ -31,7 +31,19 @@ public class HBaseAPITest {
         }
     }
 
-    public static void createTable(String tableName, String... columnFamilies) throws Exception {
+    public static void main(String[] args) {
+        try {
+            createTable("test_api", "info");
+            String[] columns = {"name1", "age1"};
+            String[] values = {"rogerguo1", "181"};
+            insertData("test_api", "guoyang", "info", columns, values);
+            scanRow("test_api", "guoyang");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+     }
+
+    public static void createTable(String tableName, String... columnFamilies) throws IOException {
         Admin admin = conn.getAdmin();
 
         HTableDescriptor table = new HTableDescriptor(TableName.valueOf(tableName));

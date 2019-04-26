@@ -1,11 +1,17 @@
 package com.rogerguo.ihbase.v1;
 
 
+import com.rogerguo.demo.SpatialRange;
+import com.rogerguo.demo.SpatialTemporalRecord;
 import org.apache.hadoop.hbase.client.Get;
+import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * @Author : guoyang
@@ -26,20 +32,132 @@ public class Index {
 
     public long lastIndexKey;
 
+    public long lastColumnKey;
+
     public Index(String zookeeperUrl) {
         this.server = new HBaseUtils(zookeeperUrl);
+        // 索引表中rowkey为定长时间段，column为非定长时间，value为空间索引
+        initialize();
     }
 
-    public void update(Map<String, Object> dataMap) {
-        //1.检测是否需要新开一个时间段, TODO 暂时假设每个小时都有数据
+    private void initialize() {
+        server.createTable(INDEX_TABLE, INDEX_FAMILY);
+        this.initIndexKey = -1;
+        this.lastIndexKey = -1;
+        this.lastColumnKey = -1;
+    }
 
-        if ((System.currentTimeMillis() - lastIndexKey) >= TIME_PERIOD) {
+    /**
+     *
+     * @param dataMap
+     * @return 返回最新的时域索引key
+     */
+    public Long[] update(Map<String, Object> dataMap) {
+        long indexKey = this.lastIndexKey;
+        long columnKey = this.lastColumnKey;
 
+        //1.检测是否需要新开一个时间段,
+        // TODO 暂时假设每个时间间隔都有数据，后面需要考虑某些时间段内数据量很少或没有数据的情况
+        long currentTimestamp = System.currentTimeMillis();
+        if ((currentTimestamp - lastIndexKey) >= TIME_PERIOD) {
+            //1.1 需要新开一个时间段
+            long newIndexKey;
+            long newColumnKey;
+            if (lastIndexKey != -1) {
+                newIndexKey = lastIndexKey + TIME_PERIOD;
+                newColumnKey = currentTimestamp - newIndexKey;
+
+            } else {
+                newIndexKey = currentTimestamp;
+                newColumnKey = currentTimestamp - currentTimestamp;
+            }
+            indexKey = newIndexKey;
+            columnKey = newColumnKey;
         } else {
-            //2.检测在当前时间段内属于第几个子时间段
+            // 1.2不需要新开时间段
+
+            long newColumnKey = currentTimestamp - lastIndexKey;
+            columnKey = newColumnKey;
 
         }
         //3.生成索引记录
+        Put put = new Put(Bytes.toBytes(indexKey));
+        String spatialIndexValue = generateSpatialRange(dataMap);
+        put.addColumn(Bytes.toBytes(INDEX_FAMILY), Bytes.toBytes(columnKey), Bytes.toBytes(spatialIndexValue));
+        server.put(INDEX_TABLE, put);
+
+
+        this.lastIndexKey = indexKey;
+        this.lastColumnKey = columnKey;
+        Long[] resultIndex = {indexKey, columnKey};
+        return resultIndex;
+    }
+
+
+    private String generateSpatialRange(Map<String, Object> dataMap) {
+        Set<String> keySet = dataMap.keySet();
+
+        StringBuilder stringBuilder = new StringBuilder();
+        for (String key : keySet) {
+            int longitudeMin = Integer.MAX_VALUE;
+            int longitudeMax = Integer.MIN_VALUE;
+            int latitudeMin = Integer.MAX_VALUE;
+            int latitudeMax = Integer.MIN_VALUE;
+            SpatialRange range = new SpatialRange();
+            List records = (List) dataMap.get(key);
+            for (Object record : records) {
+                SpatialTemporalRecord spatialTemporalRecord = (SpatialTemporalRecord) record;
+                if (spatialTemporalRecord.getLongitude() > longitudeMax) {
+                    longitudeMax = spatialTemporalRecord.getLongitude();
+                }
+                if (spatialTemporalRecord.getLongitude() < longitudeMin) {
+                    longitudeMin = spatialTemporalRecord.getLongitude();
+                }
+                if (spatialTemporalRecord.getLatitude() > latitudeMax) {
+                    latitudeMax = spatialTemporalRecord.getLatitude();
+                }
+                if (spatialTemporalRecord.getLatitude() < latitudeMin) {
+                    latitudeMin = spatialTemporalRecord.getLatitude();
+                }
+            }
+            range.setLongitudeMin(longitudeMin);
+            range.setLongitudeMax(longitudeMax);
+            range.setLatitudeMin(latitudeMin);
+            range.setLatitudeMax(latitudeMax);
+
+            //TODO 改善空间索引
+            stringBuilder.append(generateSpatialIndexString(key, range));
+            //spatialIndex.put(key, range);
+
+        }
+        return stringBuilder.toString();
+    }
+
+    public static String generateSpatialIndexString(String key, SpatialRange range) {
+        StringBuilder stringBuilder = new StringBuilder();
+        long longitudeMin = range.getLongitudeMin();
+        long longitudeMax = range.getLongitudeMax();
+        long latitudeMin = range.getLatitudeMin();
+        long latitudeMax = range.getLatitudeMax();
+        stringBuilder.append(key).append(":").append(longitudeMin).append(",").append(longitudeMax).append(",");
+        stringBuilder.append(latitudeMin).append(",").append(latitudeMax).append(";");
+
+        return stringBuilder.toString();
+    }
+
+    public static Map<String, SpatialRange> parseSpatialIndexString(String spatialIndexString) {
+
+        Map<String, SpatialRange> spatialIndexMap = new HashMap<>();
+        String[] rangeArray = spatialIndexString.split(";");
+        for (String range : rangeArray) {
+            String[] items = range.split(":");
+            String key = items[0];
+            String[] rangeItems = items[1].split(",");
+            SpatialRange spatialRange = new SpatialRange(Integer.valueOf(rangeItems[0]), Integer.valueOf(rangeItems[1]), Integer.valueOf(rangeItems[2]), Integer.valueOf(rangeItems[3]));
+            spatialIndexMap.put(key, spatialRange);
+        }
+
+        return spatialIndexMap;
     }
 
     public Result getLastIndexInfo() {

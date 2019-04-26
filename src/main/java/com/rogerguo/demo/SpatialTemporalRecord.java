@@ -17,8 +17,6 @@ public class SpatialTemporalRecord {
 
     private String data;
 
-    private Object object;
-
     public SpatialTemporalRecord() {
     }
 
@@ -33,7 +31,8 @@ public class SpatialTemporalRecord {
     @Override
     public String toString() {
         return "SpatialTemporalRecord{" +
-                "latitude=" + latitude +
+                "id=" + id +
+                ", latitude=" + latitude +
                 ", longitude=" + longitude +
                 ", timestamp=" + timestamp +
                 ", data='" + data + '\'' +
@@ -48,13 +47,6 @@ public class SpatialTemporalRecord {
         this.id = id;
     }
 
-    public Object getObject() {
-        return object;
-    }
-
-    public void setObject(Object object) {
-        this.object = object;
-    }
 
     public int getLatitude() {
         return latitude;

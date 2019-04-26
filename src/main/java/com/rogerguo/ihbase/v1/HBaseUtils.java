@@ -18,37 +18,56 @@ import java.util.*;
  */
 public class HBaseUtils {
 
-    private Configuration configuration;
+    private Configuration conf;
 
-    private Admin admin;
+    private Connection conn;
 
-    public static String FAMILY = "info";
+
 
     public HBaseUtils(String zookeeperUrl) {
         try {
-            this.configuration = HBaseConfiguration.create();
-            configuration.set("hbase.zookeeper.quorum", zookeeperUrl);
-            Connection connection = ConnectionFactory.createConnection(configuration);
-            this.admin = connection.getAdmin();
+            this.conf = HBaseConfiguration.create();
+            conf.set("hbase.zookeeper.quorum", zookeeperUrl);
+            this.conn = ConnectionFactory.createConnection(conf);
+
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    public void createTable(String tableName) {
+    public void createTable(String tableName, String... columnFamilies) {
+        Admin admin = null;
         try {
-            HTableDescriptor hTableDescriptor = new HTableDescriptor(TableName.valueOf(tableName));
-            HColumnDescriptor info = new HColumnDescriptor(FAMILY);
-            hTableDescriptor.addFamily(info);
-            admin.createTable(hTableDescriptor);
+            admin = conn.getAdmin();
+            HTableDescriptor table = new HTableDescriptor(TableName.valueOf(tableName));
+            for (String family : columnFamilies) {
+                HColumnDescriptor hColumnDescriptor = new HColumnDescriptor(family);
+                table.addFamily(hColumnDescriptor);
+            }
+
+            if (admin.tableExists(TableName.valueOf(tableName))) {
+                System.out.println("Table exists");
+            } else {
+                admin.createTable(table);
+                System.out.println("Table created");
+            }
+
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            if (admin != null) {
+                try {
+                    admin.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
     public void putDataBatch(String tableName, List<Put> dataList) {
         try {
-            HTable hTable = new HTable(configuration, tableName);
+            HTable hTable = new HTable(conf, tableName);
             int i;
             for (i = 0; i < dataList.size() / 1000000; i++) {
                 hTable.put(dataList.subList(i * 1000000, (i + 1) * 1000000));
@@ -61,7 +80,7 @@ public class HBaseUtils {
 
     public void put(String tableName, Put put) {
         try {
-            HTable hTable = new HTable(configuration, tableName);
+            HTable hTable = new HTable(conf, tableName);
             hTable.put(put);
         } catch (IOException e) {
             e.printStackTrace();
@@ -70,98 +89,40 @@ public class HBaseUtils {
 
     public void putBatch(String tableName, List<Put> putList) {
         try {
-            HTable hTable = new HTable(configuration, tableName);
+            HTable hTable = new HTable(conf, tableName);
             hTable.put(putList);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public void scan(String tableName, int startRow, int stopRow) {
-
-        ResultScanner results = null;
-        HTable hTable = null;
-
-        long firstRowArriveTime = 0;
+    public List<Result> scan(String tableName, long startKey, long stopKey) {
+        List<Result> resultList = new ArrayList<>();
         try {
-            hTable = new HTable(configuration, tableName);
+            HTable hTable  = new HTable(conf, tableName);
             Scan scan = new Scan();
-            //System.out.println("HTable: " + System.currentTimeMillis());
-
-
-            scan.setStartRow(Bytes.toBytes(startRow));
-            scan.setStopRow(Bytes.toBytes(stopRow));
-            List<String> valueList = new ArrayList<>();
-            int count = 0;
-
-            long startTime = System.currentTimeMillis();
-            results = hTable.getScanner(scan);
-
-            Iterator<Result> iterator = results.iterator();
-            while (iterator.hasNext()) {
-                Result result = iterator.next();
-                if (count == 0) {
-                    firstRowArriveTime = System.currentTimeMillis() - startTime;
-                }
-                count++;
-
-                NavigableMap<byte[], byte[]> map = result.getFamilyMap(FAMILY.getBytes());
-                for (Map.Entry<byte[], byte[]> entry : map.entrySet()) {
-                    String key = Bytes.toString(entry.getKey());
-                    String value = Bytes.toString(entry.getValue());
-                    valueList.add(value);
-                }
-
+            scan.setStartRow(Bytes.toBytes(startKey));
+            scan.setStopRow(Bytes.toBytes(stopKey));
+            ResultScanner results = hTable.getScanner(scan);
+            for (Result result : results) {
+                resultList.add(result);
             }
-            long stopTime = System.currentTimeMillis();
-            //print(valueList);
-            System.out.println("This scan consumes " + (stopTime - startTime) + "ms Size: " + valueList.size());
-            System.out.println("The first row of scan arrives needs " + firstRowArriveTime + "ms");
+            return resultList;
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            try {
-                results.close();
-                hTable.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
+
+        return resultList;
     }
 
 
 
-    public void get(String tableName, String rowkey) {
-        HTable htable = null;
-        try {
-            htable = new HTable(configuration, Bytes.toBytes(tableName));
-            //long startTime = System.currentTimeMillis();
-            Get get = new Get(Bytes.toBytes(rowkey));
-            List<String> stringList = new ArrayList<>();
 
-            long startTime = System.currentTimeMillis();
-            Result result = htable.get(get);
-            if (!result.isEmpty()) {
-                stringList = parseGetResult(result);
-            }
-            long stopTime = System.currentTimeMillis();
-            //print(stringList);
-            System.out.println("This get consumes " + (stopTime - startTime) + "ms " + " Size: " + stringList.size());
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                htable.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
 
     public Result get(String tableName, byte[] rowkey) {
         HTable htable = null;
         try {
-            htable = new HTable(configuration, Bytes.toBytes(tableName));
+            htable = new HTable(conf, Bytes.toBytes(tableName));
             //long startTime = System.currentTimeMillis();
             Get get = new Get(rowkey);
             List<String> stringList = new ArrayList<>();
@@ -182,21 +143,7 @@ public class HBaseUtils {
         return null;
     }
 
-    private List<String> parseGetResult(Result hbaseResult) {
 
-        List<String> resultList = new ArrayList<>();
-        NavigableMap<byte[], byte[]> map = hbaseResult.getFamilyMap(FAMILY.getBytes());
-        long startTime = System.currentTimeMillis();
-        for (Map.Entry<byte[], byte[]> entry : map.entrySet()) {
-            String key = Bytes.toString(entry.getKey());
-            String value = Bytes.toString(entry.getValue());
-            String[] valueList = value.split(";");
-            resultList.addAll(new ArrayList<String>(Arrays.asList(valueList)));
-        }
-        long stopTime = System.currentTimeMillis();
-        System.out.println("parse data consumes " + (stopTime - startTime) + "ms");
-        return resultList;
-    }
 
     private void print(List<String> list) {
         for (String item : list) {

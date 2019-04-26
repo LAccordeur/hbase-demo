@@ -94,6 +94,7 @@ public class DataUtil {
 
         KeyValuePair result = new KeyValuePair();
 
+        //TODO 数据的归一化问题
         int latitude = record.getLatitude();
         int longitude = record.getLongitude();
 
