@@ -1,5 +1,9 @@
 package com.rogerguo.demo;
 
+import org.codehaus.jackson.map.ObjectMapper;
+
+import java.io.IOException;
+
 /**
  * @Author : guoyang
  * @Description :
@@ -28,15 +32,23 @@ public class SpatialTemporalRecord {
         this.data = data;
     }
 
+    public SpatialTemporalRecord(int id, int latitude, int longitude, long timestamp, String data) {
+        this.id = id;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.timestamp = timestamp;
+        this.data = data;
+    }
+
     @Override
     public String toString() {
-        return "SpatialTemporalRecord{" +
-                "id=" + id +
-                ", latitude=" + latitude +
-                ", longitude=" + longitude +
-                ", timestamp=" + timestamp +
-                ", data='" + data + '\'' +
-                '}';
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            return objectMapper.writeValueAsString(this);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return "";
     }
 
     public int getId() {

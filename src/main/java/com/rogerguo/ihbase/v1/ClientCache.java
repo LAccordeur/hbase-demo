@@ -51,7 +51,8 @@ public class ClientCache {
      *
      */
     public void flush() {
-        //1. 进行数据分组
+        //1. 进行数据分组：每个子区域用子区域内所有点的最相似前缀来标识
+        // TODO 由于现阶段采用的客户端缓存模拟，服务端会再进行一次排序，而后续实现时需要考虑到Set的无序性
         Map<String, Object> resultData = DataUtil.groupSpatialData(cacheMap, this.serverBlockSize);
 
         //2. 更新index
@@ -76,6 +77,7 @@ public class ClientCache {
                 SpatialTemporalRecord spatialTemporalRecord = (SpatialTemporalRecord) record;
                 put.addColumn(Bytes.toBytes(Client.DATA_FAMILY), Bytes.toBytes(spatialTemporalRecord.getId()), Bytes.toBytes(spatialTemporalRecord.toString()));
             }
+            putList.add(put);
         }
         server.putBatch(Client.DATA_TABLE, putList);
 

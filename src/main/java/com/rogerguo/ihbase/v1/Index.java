@@ -8,10 +8,7 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * @Author : guoyang
@@ -48,6 +45,16 @@ public class Index {
     }
 
     /**
+     * 我首先需要知道当前索引表中最新的那条时间索引中的固定时间间隔的时间戳信息，拿到这个时间戳后我需要做以下判断
+     * 来进一步决定我的后续操作 -- 目前的flush的数据属于哪条时域索引记录
+     * 情况1：获取flush时的时间戳信息，若时间戳与时域索引表中最新的固定间隔的时间戳差值小于固定时间间隔则，
+     * 该块数据属于这个时域索引记录，只需更新可变偏移量
+     *
+     * 情况2：若flush时的时间戳与时域索引表中最新的固定时间间隔的时间戳大于固定时间间隔且小于两倍的固定时间间隔，
+     * 则在索引表中最新的固定时间间隔时间戳上加上一个固定时间间隔的值作为一个新的索引记录
+     *
+     * 情况3：若flush时的时间戳与时域索引表中最新的固定时间间隔的时间吹的差值大于等于两倍的固定四件间隔，
+     * 则需要将前面的索引信息也进行更新
      *
      * @param dataMap
      * @return 返回最新的时域索引key
@@ -56,10 +63,45 @@ public class Index {
         long indexKey = this.lastIndexKey;
         long columnKey = this.lastColumnKey;
 
-        //1.检测是否需要新开一个时间段,
-        // TODO 暂时假设每个时间间隔都有数据，后面需要考虑某些时间段内数据量很少或没有数据的情况
+        //判断时域索引的时间戳与当前时间戳的差值
         long currentTimestamp = System.currentTimeMillis();
-        if ((currentTimestamp - lastIndexKey) >= TIME_PERIOD) {
+        long timeDelta = currentTimestamp - lastIndexKey;
+
+        if (timeDelta < TIME_PERIOD) {
+            //属于情况一，直接在当前索引记录中更新时间偏移量
+            long newColumnKey = timeDelta;
+            columnKey = newColumnKey;
+        } else if (timeDelta >= TIME_PERIOD && timeDelta < 2 * TIME_PERIOD) {
+            //属于情况二，需要新建索引记录
+            long newIndexKey;
+            long newColumnKey;
+            if (lastIndexKey != -1) {
+                newIndexKey = lastIndexKey + TIME_PERIOD;
+                newColumnKey = currentTimestamp - newIndexKey;
+            } else {
+                //第一条索引记录
+                newIndexKey = currentTimestamp;
+                newColumnKey = currentTimestamp - currentTimestamp;
+            }
+            indexKey = newIndexKey;
+            columnKey = newColumnKey;
+        } else {
+            //属于第三种情况，补齐空的索引记录
+            long count = timeDelta / TIME_PERIOD;
+            List<Put> putList = new ArrayList<>();
+            for (int i = 1; i < count; i++) {
+                long rowkey = lastIndexKey + i * TIME_PERIOD;
+                long emptyColumnKey = -1L;
+                Put put = new Put(Bytes.toBytes(rowkey));
+                put.addColumn(Bytes.toBytes(INDEX_FAMILY), Bytes.toBytes(emptyColumnKey), Bytes.toBytes(""));
+                putList.add(put);
+            }
+
+            server.putBatch(INDEX_TABLE, putList);
+
+        }
+
+        /*if ((currentTimestamp - lastIndexKey) >= TIME_PERIOD) {
             //1.1 需要新开一个时间段
             long newIndexKey;
             long newColumnKey;
@@ -79,8 +121,8 @@ public class Index {
             long newColumnKey = currentTimestamp - lastIndexKey;
             columnKey = newColumnKey;
 
-        }
-        //3.生成索引记录
+        }*/
+        //3.生成当前的索引记录
         Put put = new Put(Bytes.toBytes(indexKey));
         String spatialIndexValue = generateSpatialRange(dataMap);
         put.addColumn(Bytes.toBytes(INDEX_FAMILY), Bytes.toBytes(columnKey), Bytes.toBytes(spatialIndexValue));
@@ -130,15 +172,16 @@ public class Index {
             //spatialIndex.put(key, range);
 
         }
+        stringBuilder.deleteCharAt(stringBuilder.length() - 1);
         return stringBuilder.toString();
     }
 
     public static String generateSpatialIndexString(String key, SpatialRange range) {
         StringBuilder stringBuilder = new StringBuilder();
-        long longitudeMin = range.getLongitudeMin();
-        long longitudeMax = range.getLongitudeMax();
-        long latitudeMin = range.getLatitudeMin();
-        long latitudeMax = range.getLatitudeMax();
+        int longitudeMin = range.getLongitudeMin();
+        int longitudeMax = range.getLongitudeMax();
+        int latitudeMin = range.getLatitudeMin();
+        int latitudeMax = range.getLatitudeMax();
         stringBuilder.append(key).append(":").append(longitudeMin).append(",").append(longitudeMax).append(",");
         stringBuilder.append(latitudeMin).append(",").append(latitudeMax).append(";");
 
@@ -147,7 +190,7 @@ public class Index {
 
     public static Map<String, SpatialRange> parseSpatialIndexString(String spatialIndexString) {
 
-        Map<String, SpatialRange> spatialIndexMap = new HashMap<>();
+        Map<String, SpatialRange> spatialIndexMap = new LinkedHashMap<>();
         String[] rangeArray = spatialIndexString.split(";");
         for (String range : rangeArray) {
             String[] items = range.split(":");

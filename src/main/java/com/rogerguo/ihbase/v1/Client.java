@@ -8,17 +8,22 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.codehaus.jackson.map.ObjectMapper;
 
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.*;
 
 /**
  * @Author : guoyang
  * @Description : 由于方案中的设想是在flush的过程中进行地理数据的分组聚合，而这个过程从目前找到的信息
  * 来看需要修改HBase的源码（HBase 协处理器可行性 preFlush是否能做的？），暂时的测试实现方案是先将数据缓存在客户端，并在客户端完成数据的分组聚合再提交
  * 到服务端中并同时更新索引表；这就意味着数据查询会存在一段真空期，同时在HBase的MemStore中的数据也是经过了分组组合的
+ *
+ * 假设：
+ * 1.达到一次memory flush的时间小于时域索引中的固定时间间隔
+ * 2.flush时在创建可变时间偏移量时利用到的时间精度可以保证两次连续的flush的时间戳是不同的
  *
  * 存储形式：所有时间段的数据都放在一个表中
  * 时域设计：将时间信息作为rowkey的一部分，并且采用fixed time period，在当前时间段内再根据数量进行等分
@@ -39,7 +44,7 @@ public class Client {
 
     public Client(String zookeeperUrl) {
         //进行初始化工作，包括建立客户端缓存、生成数据表和索引表
-        this.clientCache = new ClientCache(zookeeperUrl, 10000, 100);
+        this.clientCache = new ClientCache(zookeeperUrl, 200, 20);
         this.server = new HBaseUtils(zookeeperUrl);
         server.createTable(Client.DATA_TABLE, Client.DATA_FAMILY);
     }
@@ -47,7 +52,40 @@ public class Client {
 
 
 
-    public void main(String[] args) {
+    public static void main(String[] args) {
+
+
+        RangeQueryCommand command = new RangeQueryCommand(455305418, 500000000, 205950878, 1828127042, 1556418630832L, 1556418631614L);
+        new Client("127.0.0.1").batchPut();
+
+    }
+
+    public void batchPut() {
+
+        try {
+            //暂时以模拟数据进行替代测试，测试完成后利用nyc-taxi进行测试
+            File file = new File("input.log");
+            if (!file.exists()) {
+                file.createNewFile();
+            }
+            FileWriter writer = new FileWriter(file, true);
+            Random random = new Random(System.currentTimeMillis());
+            for (int i = 0; i < 1000; i++) {
+                int id = i;
+                int longitude = Math.abs(random.nextInt(1000));
+                int latitude = Math.abs(random.nextInt(1000));
+                long timestamp = System.currentTimeMillis();
+                String data = String.valueOf(random.nextLong());
+                SpatialTemporalRecord record = new SpatialTemporalRecord(id, latitude, longitude, timestamp, data);
+                //put(record);
+                writer.write(record.toString());
+                writer.write("\n");
+            }
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
 
     }
 
@@ -73,6 +111,24 @@ public class Client {
         Set<String> resultKeySet = parseIndexScanResult(resultList, command);
 
         //3. 根据读取到的聚合key读取记录，并在内存中进行解析
+        for (String key : resultKeySet) {
+            Result result = server.get(Client.DATA_TABLE, Bytes.toBytes(key));
+            for (Cell cell : result.listCells()) {
+                int id = Bytes.toInt(cell.getQualifier());
+                String value = Bytes.toString(cell.getValueArray());
+                ObjectMapper objectMapper = new ObjectMapper();
+                SpatialTemporalRecord resultRecord = null;
+                try {
+                    resultRecord = objectMapper.readValue(value, SpatialTemporalRecord.class);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                if (command.isContainThisPoint(resultRecord)) {
+                    System.out.println("id = " + Bytes.toInt(cell.getQualifier()) +
+                            "; value = " + Bytes.toString(cell.getValue()));
+                }
+            }
+        }
     }
 
     private Set<String> parseIndexScanResult(List<Result> resultList, RangeQueryCommand command) {
@@ -92,11 +148,13 @@ public class Client {
                 Map<String, SpatialRange> spatialIndexMap = Index.parseSpatialIndexString(spatialIndexString);
                 Set<String> spatialKeySet = spatialIndexMap.keySet();
                 if (i == 0) {
-                    if ((command.getTimeMax() > temporalIndexKey) && (command.getTimeMin() < temporalIndexKey + temporalColumnKey)) {
+                    boolean isOverlop = (command.getTimeMax() > temporalIndexKey) && (command.getTimeMin() < temporalIndexKey + temporalColumnKey);
+                    if (isOverlop) {
                         // 说明时域上有交集
                         for (String spatialKey : spatialKeySet) {
                             SpatialRange spatialRange = spatialIndexMap.get(spatialKey);
                             if (spatialRange.isOverlap(rangeQuerySpatialRange)) {
+                                //空间域上有交集
                                 Long[] temporalIndex = {temporalIndexKey, temporalColumnKey};
                                 String queryKey = ClientCache.generateKey(spatialKey, temporalIndex);
                                 resultKeySet.add(queryKey);
