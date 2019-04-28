@@ -33,11 +33,8 @@ public class HBaseAPITest {
 
     public static void main(String[] args) {
         try {
-            createTable("test_api", "info");
-            String[] columns = {"name1", "age1"};
-            String[] values = {"rogerguo1", "181"};
-            insertData("test_api", "guoyang", "info", columns, values);
-            scanRow("test_api", "guoyang");
+            scanDataTable("taxi_data");
+            scanIndexTable("taxi_data_index");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -82,6 +79,34 @@ public class HBaseAPITest {
             System.out.println(rowkey +
                     " column=" + Bytes.toString(kv.getFamily()) + ":" + Bytes.toString(kv.getQualifier()) +
                     ", timestamp=" + kv.getTimestamp() + ", value=" + Bytes.toString(kv.getValue()));
+        }
+    }
+
+    public static void scanIndexTable(String tableName) throws IOException {
+        Scan scan = new Scan();
+        Table table = conn.getTable(TableName.valueOf(tableName));
+        ResultScanner resultScanner = table.getScanner(scan);
+        for (Result result : resultScanner) {
+            for (Cell cell : result.listCells()) {
+                long rowkey = Bytes.toLong(cell.getRow());
+                long timeOffset = Bytes.toLong(cell.getQualifier());
+                String spatialValue = Bytes.toString(cell.getValue());
+                System.out.println("rowkey = " +  rowkey + "    timeOffset = " + timeOffset + "     spatial value = " + spatialValue);
+            }
+        }
+    }
+
+    public static void scanDataTable(String tableName) throws IOException {
+        Scan scan = new Scan();
+        Table table = conn.getTable(TableName.valueOf(tableName));
+        ResultScanner resultScanner = table.getScanner(scan);
+        for (Result result : resultScanner) {
+            for (Cell cell : result.listCells()) {
+                String rowkey = Bytes.toString(cell.getRow());
+                int id = Bytes.toInt(cell.getQualifier());
+                String value = Bytes.toString(cell.getValue());
+                System.out.println("rowkey = " +  rowkey + "    id = " + id + "     spatial temporal value = " + value);
+            }
         }
     }
 }

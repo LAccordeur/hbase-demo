@@ -25,7 +25,7 @@ public class Index {
 
     public static long TIME_PERIOD = 60 * 60 * 1000; //一个小时
 
-    public long initIndexKey;
+    //public long initIndexKey;
 
     public long lastIndexKey;
 
@@ -39,7 +39,7 @@ public class Index {
 
     private void initialize() {
         server.createTable(INDEX_TABLE, INDEX_FAMILY);
-        this.initIndexKey = -1;
+        //this.initIndexKey = -1;
         this.lastIndexKey = -1;
         this.lastColumnKey = -1;
     }
@@ -60,11 +60,16 @@ public class Index {
      * @return 返回最新的时域索引key
      */
     public Long[] update(Map<String, Object> dataMap) {
+        long currentTimestamp = System.currentTimeMillis();
+        if (this.lastIndexKey == -1 && this.lastColumnKey == -1) {
+            this.lastIndexKey = currentTimestamp;
+            this.lastColumnKey = currentTimestamp - currentTimestamp;
+        }
+
         long indexKey = this.lastIndexKey;
         long columnKey = this.lastColumnKey;
 
         //判断时域索引的时间戳与当前时间戳的差值
-        long currentTimestamp = System.currentTimeMillis();
         long timeDelta = currentTimestamp - lastIndexKey;
 
         if (timeDelta < TIME_PERIOD) {

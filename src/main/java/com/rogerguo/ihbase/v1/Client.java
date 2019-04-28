@@ -55,8 +55,8 @@ public class Client {
     public static void main(String[] args) {
 
 
-        RangeQueryCommand command = new RangeQueryCommand(455305418, 500000000, 205950878, 1828127042, 1556418630832L, 1556418631614L);
-        new Client("127.0.0.1").batchPut();
+        RangeQueryCommand command = new RangeQueryCommand(200, 500, 100, 200, 1556454237256L, 1556454237559L);
+        new Client("127.0.0.1").scan(command);
 
     }
 
@@ -70,14 +70,14 @@ public class Client {
             }
             FileWriter writer = new FileWriter(file, true);
             Random random = new Random(System.currentTimeMillis());
-            for (int i = 0; i < 1000; i++) {
+            for (int i = 0; i <= 1000; i++) {
                 int id = i;
                 int longitude = Math.abs(random.nextInt(1000));
                 int latitude = Math.abs(random.nextInt(1000));
                 long timestamp = System.currentTimeMillis();
                 String data = String.valueOf(random.nextLong());
                 SpatialTemporalRecord record = new SpatialTemporalRecord(id, latitude, longitude, timestamp, data);
-                //put(record);
+                put(record);
                 writer.write(record.toString());
                 writer.write("\n");
             }
@@ -115,7 +115,7 @@ public class Client {
             Result result = server.get(Client.DATA_TABLE, Bytes.toBytes(key));
             for (Cell cell : result.listCells()) {
                 int id = Bytes.toInt(cell.getQualifier());
-                String value = Bytes.toString(cell.getValueArray());
+                String value = Bytes.toString(cell.getValue());
                 ObjectMapper objectMapper = new ObjectMapper();
                 SpatialTemporalRecord resultRecord = null;
                 try {
@@ -124,8 +124,8 @@ public class Client {
                     e.printStackTrace();
                 }
                 if (command.isContainThisPoint(resultRecord)) {
-                    System.out.println("id = " + Bytes.toInt(cell.getQualifier()) +
-                            "; value = " + Bytes.toString(cell.getValue()));
+                    System.out.println("id = " + id +
+                            "; value = " + value);
                 }
             }
         }
