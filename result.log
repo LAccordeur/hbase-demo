@@ -11,3 +11,18 @@ id = 461; value = {"id":461,"latitude":151,"longitude":369,"timestamp":155645423
 id = 547; value = {"id":547,"latitude":115,"longitude":296,"timestamp":1556454237549,"data":"5671138710211729940"}
 id = 559; value = {"id":559,"latitude":184,"longitude":277,"timestamp":1556454237551,"data":"51011529749842724"}
 id = 600; value = {"id":600,"latitude":178,"longitude":433,"timestamp":1556454237557,"data":"6700903981145977686"}
+
+
+
+id = 14; value = {"id":14,"latitude":191,"longitude":256,"timestamp":1556520054039,"data":"-2158906548331894906"}
+id = 48; value = {"id":48,"latitude":151,"longitude":452,"timestamp":1556520054054,"data":"3671529909336751806"}
+id = 53; value = {"id":53,"latitude":135,"longitude":300,"timestamp":1556520054054,"data":"7013343065862394333"}
+id = 111; value = {"id":111,"latitude":170,"longitude":321,"timestamp":1556520054070,"data":"1934306682940142861"}
+id = 152; value = {"id":152,"latitude":109,"longitude":462,"timestamp":1556520054086,"data":"5691412787417188235"}
+id = 213; value = {"id":213,"latitude":144,"longitude":288,"timestamp":1556520054273,"data":"-5608554221338705035"}
+id = 225; value = {"id":225,"latitude":103,"longitude":283,"timestamp":1556520054273,"data":"5710645224825058536"}
+id = 240; value = {"id":240,"latitude":141,"longitude":323,"timestamp":1556520054273,"data":"-4853901238501607527"}
+id = 306; value = {"id":306,"latitude":124,"longitude":336,"timestamp":1556520054273,"data":"2510366881410610653"}
+id = 327; value = {"id":327,"latitude":190,"longitude":318,"timestamp":1556520054289,"data":"3071154202620830962"}
+id = 344; value = {"id":344,"latitude":155,"longitude":474,"timestamp":1556520054289,"data":"6234723463889043203"}
+id = 357; value = {"id":357,"latitude":131,"longitude":357,"timestamp":1556520054289,"data":"2834650533845623860"}

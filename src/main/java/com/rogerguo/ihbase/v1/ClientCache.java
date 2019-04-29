@@ -23,6 +23,10 @@ public class ClientCache {
 
     private Index index;
 
+    private long minTimestamp = Long.MAX_VALUE;
+
+    private long maxTimestamp = Long.MIN_VALUE;
+
 
     public ClientCache(String zookeeperUrl, int cacheSize, int serverBlockSize) {
         this.cacheMap = new HashMap<>();
@@ -34,6 +38,16 @@ public class ClientCache {
     }
 
     public void append(KeyValuePair data) {
+        SpatialTemporalRecord record = (SpatialTemporalRecord) data.getValue();
+        long itemTimestamp = record.getTimestamp();
+        if (itemTimestamp > maxTimestamp) {
+            this.maxTimestamp = itemTimestamp;
+        }
+
+        if (itemTimestamp < minTimestamp) {
+            this.minTimestamp = itemTimestamp;
+        }
+
         cacheMap.put(data.getKey(), data.getValue());
 
     }
@@ -56,12 +70,13 @@ public class ClientCache {
         Map<String, Object> resultData = DataUtil.groupSpatialData(cacheMap, this.serverBlockSize);
 
         //2. 更新index
-        Long[] currentTimeIndex = index.update(resultData);
+        Long[] currentTimeIndex = index.update(resultData, minTimestamp, maxTimestamp);
         sendToServer(resultData, currentTimeIndex);
 
         //3. 清空缓存
         cacheMap.clear();
     }
+
 
     private void sendToServer(Map<String, Object> dataMap, Long[] currentTimeIndex) {
         //key -> 子区域id     value -> 该子区域内的数据点list

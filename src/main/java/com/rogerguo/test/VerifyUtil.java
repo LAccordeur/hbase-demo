@@ -17,7 +17,7 @@ public class VerifyUtil {
     public static void verify() {
         List<String> resultList = new ArrayList<>();
 
-        File file = new File("input.log");
+        File file = new File("input_2.log");
         try {
             String encoding = "UTF8";
             if (file.isFile() && file.exists()) {
@@ -41,7 +41,7 @@ public class VerifyUtil {
             try {
                 ObjectMapper objectMapper = new ObjectMapper();
                 SpatialTemporalRecord object = objectMapper.readValue(item, SpatialTemporalRecord.class);
-                RangeQueryCommand command = new RangeQueryCommand(200, 500, 100, 200, 1556454237256L, 1556454237559L);
+                RangeQueryCommand command = new RangeQueryCommand(200, 500, 100, 200, 1556520054039L, 1556520054320L);
                 if (command.isContainThisPoint(object)) {
                     System.out.println(object.toString());
                 }

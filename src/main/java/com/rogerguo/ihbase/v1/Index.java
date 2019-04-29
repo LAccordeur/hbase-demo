@@ -31,8 +31,11 @@ public class Index {
 
     public long lastColumnKey;
 
+    private boolean isStreamData;
+
     public Index(String zookeeperUrl) {
         this.server = new HBaseUtils(zookeeperUrl);
+        this.isStreamData = true;
         // 索引表中rowkey为定长时间段，column为非定长时间，value为空间索引
         initialize();
     }
@@ -59,11 +62,22 @@ public class Index {
      * @param dataMap
      * @return 返回最新的时域索引key
      */
-    public Long[] update(Map<String, Object> dataMap) {
-        long currentTimestamp = System.currentTimeMillis();
+    public Long[] update(Map<String, Object> dataMap, long minTimestamp, long maxTimestamp) {
+
+        //TODO bug确认：
+        // 1.第一条时域索引记录的定长时间应该时缓存中最小的时间戳而不是最大的时间戳
+        // 2.每条记录的第一个可变偏移量对应的时间段范围为上条记录的最后一个可变偏移量至当前记录的时间戳
+        // 3.数据实时流入和分析历史数据时的建立索引的差异
+        long currentTimestamp;
+        if (isStreamData) {
+            currentTimestamp = System.currentTimeMillis();
+        } else {
+            currentTimestamp = maxTimestamp;
+        }
         if (this.lastIndexKey == -1 && this.lastColumnKey == -1) {
-            this.lastIndexKey = currentTimestamp;
-            this.lastColumnKey = currentTimestamp - currentTimestamp;
+            //初始化
+            this.lastIndexKey = minTimestamp;
+            this.lastColumnKey = minTimestamp - minTimestamp;
         }
 
         long indexKey = this.lastIndexKey;
@@ -73,21 +87,14 @@ public class Index {
         long timeDelta = currentTimestamp - lastIndexKey;
 
         if (timeDelta < TIME_PERIOD) {
-            //属于情况一，直接在当前索引记录中更新时间偏移量
+            //满足假设一时，该步骤会执行，属于情况一，直接在当前索引记录中更新时间偏移量 ##TODO 若不满足假设一会有BUG 潜在点：时域范围丢失##
             long newColumnKey = timeDelta;
             columnKey = newColumnKey;
         } else if (timeDelta >= TIME_PERIOD && timeDelta < 2 * TIME_PERIOD) {
             //属于情况二，需要新建索引记录
-            long newIndexKey;
-            long newColumnKey;
-            if (lastIndexKey != -1) {
-                newIndexKey = lastIndexKey + TIME_PERIOD;
-                newColumnKey = currentTimestamp - newIndexKey;
-            } else {
-                //第一条索引记录
-                newIndexKey = currentTimestamp;
-                newColumnKey = currentTimestamp - currentTimestamp;
-            }
+            long newIndexKey = lastIndexKey + TIME_PERIOD;
+            long newColumnKey = currentTimestamp - newIndexKey;
+
             indexKey = newIndexKey;
             columnKey = newColumnKey;
         } else {
@@ -103,6 +110,9 @@ public class Index {
             }
 
             server.putBatch(INDEX_TABLE, putList);
+
+            indexKey = lastIndexKey + TIME_PERIOD * count;
+            columnKey = currentTimestamp - indexKey;
 
         }
 
