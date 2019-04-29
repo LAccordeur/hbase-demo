@@ -103,7 +103,7 @@ public class HBaseAPITest {
         for (Result result : resultScanner) {
             for (Cell cell : result.listCells()) {
                 String rowkey = Bytes.toString(cell.getRow());
-                int id = Bytes.toInt(cell.getQualifier());
+                String id = Bytes.toString(cell.getQualifier());
                 String value = Bytes.toString(cell.getValue());
                 System.out.println("rowkey = " +  rowkey + "    id = " + id + "     spatial temporal value = " + value);
             }

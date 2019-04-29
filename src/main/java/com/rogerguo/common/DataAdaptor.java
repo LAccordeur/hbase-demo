@@ -32,7 +32,7 @@ public class DataAdaptor {
     public static SpatialTemporalRecord transferTaxiData2SpatialTemporalRecord(TaxiData taxiData) {
         SpatialTemporalRecord record = new SpatialTemporalRecord();
 
-        record.setId(taxiData.getId());
+        record.setId(taxiData.getMedallion() + taxiData.getHackLicense());
         record.setLongitude(bitNormalizedDimension(taxiData.getLongitude(), -180D, 180D, 31));
         record.setLatitude(bitNormalizedDimension(taxiData.getLatitude(), -90D, 90D, 31));
         record.setTimestamp(taxiData.getDate().getTime());

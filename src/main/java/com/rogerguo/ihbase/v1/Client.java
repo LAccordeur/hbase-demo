@@ -1,5 +1,7 @@
 package com.rogerguo.ihbase.v1;
 
+import com.rogerguo.common.DataAdaptor;
+import com.rogerguo.data.TaxiData;
 import com.rogerguo.demo.KeyValuePair;
 import com.rogerguo.demo.RangeQueryCommand;
 import com.rogerguo.demo.SpatialRange;
@@ -44,6 +46,7 @@ public class Client {
 
     public Client(String zookeeperUrl) {
         //进行初始化工作，包括建立客户端缓存、生成数据表和索引表
+        //this.clientCache = new ClientCache(zookeeperUrl, 100000, 1000);
         this.clientCache = new ClientCache(zookeeperUrl, 200, 20);
         this.server = new HBaseUtils(zookeeperUrl);
         server.createTable(Client.DATA_TABLE, Client.DATA_FAMILY);
@@ -57,16 +60,41 @@ public class Client {
 
         RangeQueryCommand command = new RangeQueryCommand(200, 500, 100, 200, 1556520054039L, 1556520054320L);
         Client client = new Client("127.0.0.1");
-        //client.batchPut();
-        client.scan(command);
+        client.batchPut();
 
+        //client.batchPutTaxiData();
+
+    }
+
+    public void batchPutTaxiData() {
+        TaxiData taxiData = new TaxiData();
+        List<TaxiData> taxiDataList = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_aa");
+        putTaxiData(taxiDataList);
+        List<TaxiData> taxiDataList1 = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_ab");
+        putTaxiData(taxiDataList1);
+        List<TaxiData> taxiDataList2 = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_ac");
+        putTaxiData(taxiDataList2);
+        List<TaxiData> taxiDataList3 = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_ad");
+        putTaxiData(taxiDataList3);
+        List<TaxiData> taxiDataList4 = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_ae");
+        putTaxiData(taxiDataList4);
+    }
+
+    private void putTaxiData(List<TaxiData> taxiDataList) {
+        long startTime = System.currentTimeMillis();
+        for (TaxiData taxiData : taxiDataList) {
+            SpatialTemporalRecord record = DataAdaptor.transferTaxiData2SpatialTemporalRecord(taxiData);
+            put(record);
+        }
+        long stopTime = System.currentTimeMillis();
+        System.out.println("This part consumes " + (stopTime - startTime) / 1000 + " s");
     }
 
     public void batchPut() {
 
         try {
             //暂时以模拟数据进行替代测试，测试完成后利用nyc-taxi进行测试
-            File file = new File("input_2.log");
+            File file = new File("input_3.log");
             if (!file.exists()) {
                 file.createNewFile();
             }
@@ -78,7 +106,7 @@ public class Client {
                 int latitude = Math.abs(random.nextInt(1000));
                 long timestamp = System.currentTimeMillis();
                 String data = String.valueOf(random.nextLong());
-                SpatialTemporalRecord record = new SpatialTemporalRecord(id, latitude, longitude, timestamp, data);
+                SpatialTemporalRecord record = new SpatialTemporalRecord(String.valueOf(id), latitude, longitude, timestamp, data);
                 put(record);
                 writer.write(record.toString());
                 writer.write("\n");

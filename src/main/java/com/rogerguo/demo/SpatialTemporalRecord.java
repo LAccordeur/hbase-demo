@@ -11,7 +11,7 @@ import java.io.IOException;
  */
 public class SpatialTemporalRecord {
 
-    private int id;
+    private String id;
 
     private int latitude;
 
@@ -32,7 +32,7 @@ public class SpatialTemporalRecord {
         this.data = data;
     }
 
-    public SpatialTemporalRecord(int id, int latitude, int longitude, long timestamp, String data) {
+    public SpatialTemporalRecord(String id, int latitude, int longitude, long timestamp, String data) {
         this.id = id;
         this.latitude = latitude;
         this.longitude = longitude;
@@ -51,14 +51,14 @@ public class SpatialTemporalRecord {
         return "";
     }
 
-    public int getId() {
-        return id;
-    }
 
-    public void setId(int id) {
+    public void setId(String id) {
         this.id = id;
     }
 
+    public String getId() {
+        return id;
+    }
 
     public int getLatitude() {
         return latitude;
