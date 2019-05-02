@@ -37,6 +37,15 @@ public class ClientCache {
         this.index = new Index(zookeeperUrl);
     }
 
+    public ClientCache(String zookeeperUrl, int cacheSize, int serverBlockSize, long timePeriod, boolean isStreamData) {
+        this.cacheMap = new HashMap<>();
+        this.cacheSize = cacheSize;
+        this.serverBlockSize = serverBlockSize;
+        this.server = new HBaseUtils(zookeeperUrl);
+
+        this.index = new Index(zookeeperUrl, timePeriod, isStreamData);
+    }
+
     public void append(KeyValuePair data) {
         SpatialTemporalRecord record = (SpatialTemporalRecord) data.getValue();
         long itemTimestamp = record.getTimestamp();
@@ -70,11 +79,16 @@ public class ClientCache {
         Map<String, Object> resultData = DataUtil.groupSpatialData(cacheMap, this.serverBlockSize);
 
         //2. 更新index
+        System.out.println("Time Min: " + DataUtil.printTimestamp(minTimestamp));
+        System.out.println("Time Max: " + DataUtil.printTimestamp(maxTimestamp));
         Long[] currentTimeIndex = index.update(resultData, minTimestamp, maxTimestamp);
+        System.out.println();
         sendToServer(resultData, currentTimeIndex);
 
-        //3. 清空缓存
+        //3. 清空缓存并校正时间记录
         cacheMap.clear();
+        minTimestamp = Long.MAX_VALUE;
+        maxTimestamp = Long.MIN_VALUE;
     }
 
 

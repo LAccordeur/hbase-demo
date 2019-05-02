@@ -35,9 +35,19 @@ public class Index {
 
     public Index(String zookeeperUrl) {
         this.server = new HBaseUtils(zookeeperUrl);
-        this.isStreamData = true;
+        this.isStreamData = false;
         // 索引表中rowkey为定长时间段，column为非定长时间，value为空间索引
         initialize();
+
+    }
+
+    public Index(String zookeeperUrl, long timePeriod, boolean isStreamData) {
+        this.server = new HBaseUtils(zookeeperUrl);
+        this.isStreamData = isStreamData;
+        TIME_PERIOD = timePeriod;
+        // 索引表中rowkey为定长时间段，column为非定长时间，value为空间索引
+        initialize();
+
     }
 
     private void initialize() {
@@ -86,8 +96,9 @@ public class Index {
         //判断时域索引的时间戳与当前时间戳的差值
         long timeDelta = currentTimestamp - lastIndexKey;
 
+        System.out.println("Time Delta: " + timeDelta);
         if (timeDelta < TIME_PERIOD) {
-            //满足假设一时，该步骤会执行，属于情况一，直接在当前索引记录中更新时间偏移量 ##TODO 若不满足假设一会有BUG 潜在点：时域范围丢失##
+            //满足假设一时，该步骤会首先执行，属于情况一，直接在当前索引记录中更新时间偏移量 ##TODO 若不满足假设一会有BUG 潜在点：时域范围丢失##
             long newColumnKey = timeDelta;
             columnKey = newColumnKey;
         } else if (timeDelta >= TIME_PERIOD && timeDelta < 2 * TIME_PERIOD) {
@@ -97,6 +108,8 @@ public class Index {
 
             indexKey = newIndexKey;
             columnKey = newColumnKey;
+
+            System.out.println("--------------\n");
         } else {
             //属于第三种情况，补齐空的索引记录
             long count = timeDelta / TIME_PERIOD;

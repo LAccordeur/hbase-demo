@@ -1,5 +1,6 @@
 package com.rogerguo.data;
 
+import com.rogerguo.common.DateUtil;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -49,7 +50,7 @@ public class TaxiData {
         }
 
         // date parser corresponding to the CSV format
-        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US);
+        //DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US);
 
 
         try (CSVParser parser = CSVParser.parse(input, StandardCharsets.UTF_8, CSVFormat.DEFAULT)) {
@@ -65,7 +66,8 @@ public class TaxiData {
                 taxiData.setTripTimeInSecs(Double.parseDouble(record.get(7)));
                 taxiData.setTripDistance(Double.parseDouble(record.get(8)));
 
-                taxiData.setDate(Date.from(LocalDateTime.parse(record.get(5), dateFormat).toInstant(ZoneOffset.UTC)));
+                //taxiData.setDate(Date.from(LocalDateTime.parse(record.get(5), dateFormat).toInstant(ZoneOffset.UTC)));
+                taxiData.setDate(DateUtil.parseDateString(record.get(5)));
 
                 double longitude = Double.parseDouble(record.get(9));
                 double latitude = Double.parseDouble(record.get(10));

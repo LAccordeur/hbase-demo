@@ -13,9 +13,9 @@ public class SpatialTemporalRecord {
 
     private String id;
 
-    private int latitude;
-
     private int longitude;
+
+    private int latitude;
 
     private long timestamp;
 

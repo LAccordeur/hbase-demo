@@ -5,6 +5,8 @@ import com.rogerguo.demo.RangeQueryCommand;
 import com.rogerguo.demo.SpatialTemporalRecord;
 import org.apache.hadoop.hbase.util.Bytes;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 /**
@@ -70,6 +72,13 @@ public class DataUtil {
         }
 
         return;
+    }
+
+    public static String printTimestamp(long timestamp) {
+
+        DateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        Date date = new Date(timestamp);
+        return (sdf.format(date));
     }
 
 

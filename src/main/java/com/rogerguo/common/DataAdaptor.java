@@ -1,9 +1,13 @@
 package com.rogerguo.common;
 
 import com.rogerguo.data.TaxiData;
+import com.rogerguo.demo.RangeQueryCommand;
 import com.rogerguo.demo.SpatialTemporalRecord;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Date;
 import java.util.Locale;
 
 /**
@@ -40,6 +44,26 @@ public class DataAdaptor {
 
 
         return record;
+    }
+
+    public static RangeQueryCommand transfer2RangeQueryCommand(double longitudeMin, double longitudeMax, double latitudeMin, double latitudeMax, String dateMinString, String dateMaxString) {
+        RangeQueryCommand command = new RangeQueryCommand();
+        command.setLongitudeMin(bitNormalizedDimension(longitudeMin, -180D, 180D, 31));
+        command.setLongitudeMax(bitNormalizedDimension(longitudeMax, -180D, 180D, 31));
+        command.setLatitudeMin(bitNormalizedDimension(latitudeMin, -90D, 90D, 31));
+        command.setLatitudeMax(bitNormalizedDimension(latitudeMax, -90D, 90D, 31));
+
+        //DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US);
+
+        //Date dateMin = Date.from(LocalDateTime.parse(dateMinString, dateFormat).toInstant(ZoneOffset.UTC));
+        //Date dateMax = Date.from(LocalDateTime.parse(dateMaxString, dateFormat).toInstant(ZoneOffset.UTC));
+        Date dateMin = DateUtil.parseDateString(dateMinString);
+        Date dateMax = DateUtil.parseDateString(dateMaxString);
+
+        command.setTimeMin(dateMin.getTime());
+        command.setTimeMax(dateMax.getTime());
+
+        return command;
     }
 
     /**

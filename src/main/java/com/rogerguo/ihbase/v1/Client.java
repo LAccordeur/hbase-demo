@@ -15,6 +15,9 @@ import org.codehaus.jackson.map.ObjectMapper;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
@@ -26,6 +29,7 @@ import java.util.*;
  * 假设：
  * 1.达到一次memory flush的时间小于时域索引中的固定时间间隔
  * 2.flush时在创建可变时间偏移量时利用到的时间精度可以保证两次连续的flush的时间戳是不同的
+ *
  *
  * 存储形式：所有时间段的数据都放在一个表中
  * 时域设计：将时间信息作为rowkey的一部分，并且采用fixed time period，在当前时间段内再根据数量进行等分
@@ -46,8 +50,9 @@ public class Client {
 
     public Client(String zookeeperUrl) {
         //进行初始化工作，包括建立客户端缓存、生成数据表和索引表
-        //this.clientCache = new ClientCache(zookeeperUrl, 100000, 1000);
-        this.clientCache = new ClientCache(zookeeperUrl, 200, 20);
+        //需要保证cachesize的大小小于一个time period内接受的数据量
+        this.clientCache = new ClientCache(zookeeperUrl, 10000, 1000, 3 * 60 * 60 * 1000, false);
+        //this.clientCache = new ClientCache(zookeeperUrl, 200, 20);
         this.server = new HBaseUtils(zookeeperUrl);
         server.createTable(Client.DATA_TABLE, Client.DATA_FAMILY);
     }
@@ -58,32 +63,29 @@ public class Client {
     public static void main(String[] args) {
 
 
-        RangeQueryCommand command = new RangeQueryCommand(200, 500, 100, 200, 1556520054039L, 1556520054320L);
+
+        //RangeQueryCommand command = new RangeQueryCommand(200, 500, 100, 200, 1556520054039L, 1556520054320L);
         Client client = new Client("127.0.0.1");
-        client.batchPut();
+        //client.batchPut();
 
         //client.batchPutTaxiData();
-
+        long startTime = System.currentTimeMillis();
+        client.scan(DataAdaptor.transfer2RangeQueryCommand(-74.003143,-73.995492,40.730136,40.732052, "2010-01-02 15:00:00", "2010-01-02 15:35:00"));
+        long endTime = System.currentTimeMillis();
+        System.out.println("Scan consumes " + (endTime - startTime) / 1000.0 + " s" );
     }
 
     public void batchPutTaxiData() {
         TaxiData taxiData = new TaxiData();
         List<TaxiData> taxiDataList = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_aa");
         putTaxiData(taxiDataList);
-        List<TaxiData> taxiDataList1 = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_ab");
-        putTaxiData(taxiDataList1);
-        List<TaxiData> taxiDataList2 = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_ac");
-        putTaxiData(taxiDataList2);
-        List<TaxiData> taxiDataList3 = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_ad");
-        putTaxiData(taxiDataList3);
-        List<TaxiData> taxiDataList4 = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_ae");
-        putTaxiData(taxiDataList4);
     }
 
     private void putTaxiData(List<TaxiData> taxiDataList) {
         long startTime = System.currentTimeMillis();
         for (TaxiData taxiData : taxiDataList) {
             SpatialTemporalRecord record = DataAdaptor.transferTaxiData2SpatialTemporalRecord(taxiData);
+            //System.out.println(record.toString());
             put(record);
         }
         long stopTime = System.currentTimeMillis();
@@ -144,7 +146,7 @@ public class Client {
         for (String key : resultKeySet) {
             Result result = server.get(Client.DATA_TABLE, Bytes.toBytes(key));
             for (Cell cell : result.listCells()) {
-                int id = Bytes.toInt(cell.getQualifier());
+                String id = Bytes.toString(cell.getQualifier());
                 String value = Bytes.toString(cell.getValue());
                 ObjectMapper objectMapper = new ObjectMapper();
                 SpatialTemporalRecord resultRecord = null;
@@ -154,8 +156,7 @@ public class Client {
                     e.printStackTrace();
                 }
                 if (command.isContainThisPoint(resultRecord)) {
-                    System.out.println("id = " + id +
-                            "; value = " + value);
+                    System.out.println("id = " + id +"; value = " + value);
                 }
             }
         }
@@ -193,7 +194,7 @@ public class Client {
                     } else {
                         //最后一个时间偏移量后的空白时间段的记录在下一条索引记录的第一条中
                         if (command.getTimeMax() > temporalIndexKey + temporalColumnKey) {
-                            //判断是否存在下一个索引记录
+                            //判断是否存在下一个索引记录 TODO ##BUG## 下个时间段没有数据时的情况
                             if (j + 1 < resultList.size()) {
                                 Result nextResult = resultList.get(j + 1);
                                 Cell nextCell = nextResult.listCells().get(0);
