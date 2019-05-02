@@ -32,9 +32,11 @@ public class HBaseAPITest {
     }
 
     public static void main(String[] args) {
+
         try {
-            scanDataTable("taxi_data");
-            scanIndexTable("taxi_data_index");
+            scanRow("taxi_data", "1262415600000390000000011001011100101101111100010111");
+            //scanDataTable("taxi_data");
+            //scanIndexTable("taxi_data_index");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -82,16 +84,31 @@ public class HBaseAPITest {
         }
     }
 
+    public static void scanRow(String tableName, long rowkey) throws IOException {
+        Get get = new Get(Bytes.toBytes(rowkey));
+        Table table = conn.getTable(TableName.valueOf(tableName));
+        Result result = table.get(get);
+        for (KeyValue kv : result.list()) {
+            System.out.println(rowkey +
+                    " column=" + Bytes.toString(kv.getFamily()) + ":" + Bytes.toString(kv.getQualifier()) +
+                    ", timestamp=" + kv.getTimestamp() + ", value=" + Bytes.toString(kv.getValue()));
+        }
+    }
+
     public static void scanIndexTable(String tableName) throws IOException {
         Scan scan = new Scan();
         Table table = conn.getTable(TableName.valueOf(tableName));
         ResultScanner resultScanner = table.getScanner(scan);
+        int i = 0;
         for (Result result : resultScanner) {
             for (Cell cell : result.listCells()) {
                 long rowkey = Bytes.toLong(cell.getRow());
                 long timeOffset = Bytes.toLong(cell.getQualifier());
                 String spatialValue = Bytes.toString(cell.getValue());
-                System.out.println("rowkey = " +  rowkey + "    timeOffset = " + timeOffset + "     spatial value = " + spatialValue);
+                i++;
+                if (i < 100) {
+                    System.out.println("rowkey = " + rowkey + "    timeOffset = " + timeOffset + "     spatial value = " + spatialValue);
+                }
             }
         }
     }

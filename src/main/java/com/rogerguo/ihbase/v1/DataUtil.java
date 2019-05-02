@@ -105,6 +105,7 @@ public class DataUtil {
 
     public static KeyValuePair transferToKeyValuePair(SpatialTemporalRecord record) {
 
+        //TODO ##BUG## 潜在点 同一时间段同一个子空间内如果两个点坐标完全一样会出现覆盖的情况
         KeyValuePair result = new KeyValuePair();
 
         int longitude = record.getLongitude();

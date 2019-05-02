@@ -79,7 +79,7 @@ public class ClientCache {
         long startTime = System.currentTimeMillis();
         Map<String, Object> resultData = DataUtil.groupSpatialData(cacheMap, this.serverBlockSize);
         long stopTime = System.currentTimeMillis();
-        System.out.println("Group data consumes " + (stopTime - startTime) / 1000 + " s");
+        System.out.println("Group data consumes " + (stopTime - startTime) / 1000.0 + " s");
 
         //2. 更新index
         System.out.println("Time Min: " + DataUtil.printTimestamp(minTimestamp) + " -- " + minTimestamp);

@@ -3,7 +3,9 @@ package com.rogerguo.common;
 import com.rogerguo.data.TaxiData;
 import com.rogerguo.demo.RangeQueryCommand;
 import com.rogerguo.demo.SpatialTemporalRecord;
+import org.codehaus.jackson.map.ObjectMapper;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -36,7 +38,7 @@ public class DataAdaptor {
     public static SpatialTemporalRecord transferTaxiData2SpatialTemporalRecord(TaxiData taxiData) {
         SpatialTemporalRecord record = new SpatialTemporalRecord();
 
-        record.setId(taxiData.getMedallion() + taxiData.getHackLicense());
+        record.setId(taxiData.getMedallion() + taxiData.getHackLicense() + taxiData.getDate().getTime());
         record.setLongitude(bitNormalizedDimension(taxiData.getLongitude(), -180D, 180D, 31));
         record.setLatitude(bitNormalizedDimension(taxiData.getLatitude(), -90D, 90D, 31));
         record.setTimestamp(taxiData.getDate().getTime());
@@ -44,6 +46,25 @@ public class DataAdaptor {
 
 
         return record;
+    }
+
+    public static TaxiData transferSpatialTemporalRecord2TaxiData(SpatialTemporalRecord record) {
+        /*TaxiData taxiData = new TaxiData();
+
+        taxiData.setLongitude(bitDenormalizedDimension(record.getLongitude(), -180D, 180D, 31));
+        taxiData.setLatitude(bitDenormalizedDimension(record.getLatitude(), -90D, 90D, 31));
+        taxiData.setDate(new Date(record.getTimestamp()));*/
+
+        String jsonValue = record.getData();
+        ObjectMapper mapper = new ObjectMapper();
+        TaxiData taxiData = null;
+        try {
+            taxiData = mapper.readValue(jsonValue, TaxiData.class);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return taxiData;
     }
 
     public static RangeQueryCommand transfer2RangeQueryCommand(double longitudeMin, double longitudeMax, double latitudeMin, double latitudeMax, String dateMinString, String dateMaxString) {

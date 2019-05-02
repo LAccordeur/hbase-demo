@@ -1,6 +1,7 @@
 package com.rogerguo.ihbase.v1;
 
 import com.rogerguo.common.DataAdaptor;
+import com.rogerguo.common.DateUtil;
 import com.rogerguo.data.TaxiData;
 import com.rogerguo.demo.KeyValuePair;
 import com.rogerguo.demo.RangeQueryCommand;
@@ -77,13 +78,20 @@ public class Client {
         //包含空白期的时间段
         RangeQueryCommand command2 = new RangeQueryCommand(10, 900, 10, 900, 1556774146826L, 1556774147000L);
 
-        int cacheSize = 40;
-        int serverBlockSize = 10;
-        int timePeriod = 400;
+        RangeQueryCommand readCommand = DataAdaptor.transfer2RangeQueryCommand(-74.003043,-73.985492,40.730136,40.732052, "2010-01-02 15:00:00", "2010-01-02 16:00:00");
+
+        int cacheSize = 10000;
+        int serverBlockSize = 500;
+        int timePeriod = 3 * 60 * 60 * 1000;
+        //int cacheSize = 40;
+        //int serverBlockSize = 10;
+        //int timePeriod = 400;
         boolean isStreamData = false;
         Client client = new Client("127.0.0.1", cacheSize, serverBlockSize, timePeriod, isStreamData);
+        client.batchPutTaxiData();
+
         //client.batchPutFromLog();
-        client.scan(command1);
+        //client.scan(command1);
         //client.batchPutTaxiData();
         /*long startTime = System.currentTimeMillis();
         client.scan(DataAdaptor.transfer2RangeQueryCommand(-74.003143,-73.995492,40.730136,40.732052, "2010-01-02 15:00:00", "2010-01-02 15:35:00"));
@@ -96,7 +104,7 @@ public class Client {
         long startTime = System.currentTimeMillis();
         List<TaxiData> taxiDataList = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_aa");
         long stopTime = System.currentTimeMillis();
-        System.out.println("Parse Taxi data consumes " + (stopTime - startTime) / 1000 + " s");
+        System.out.println("Parse Taxi data consumes " + (stopTime - startTime) / 1000.0 + " s");
         putTaxiData(taxiDataList);
     }
 
@@ -121,7 +129,7 @@ public class Client {
             }
             FileWriter writer = new FileWriter(file, true);
             Random random = new Random(System.currentTimeMillis());
-            for (int i = 0; i <= 1000; i++) {
+            for (int i = 0; i <= 2000; i++) {
                 int id = i;
                 int longitude = Math.abs(random.nextInt(1000));
                 int latitude = Math.abs(random.nextInt(1000));
@@ -184,7 +192,7 @@ public class Client {
 
     }
 
-    public void scan(RangeQueryCommand command) {
+    public List<SpatialTemporalRecord> scan(RangeQueryCommand command) {
         //由于是在客户端进行的模拟缓存，所以这个版本里不考虑内存数据中的额外对待
         //1. 根据时间范围扫描索引表(范围是放大了的)
         List<Result> resultList = server.scan(Index.INDEX_TABLE, command.getTimeMin() - Index.TIME_PERIOD, command.getTimeMax() + Index.TIME_PERIOD);
@@ -193,6 +201,7 @@ public class Client {
         Set<String> resultKeySet = parseIndexScanResult(resultList, command);
 
         //3. 根据读取到的聚合key读取记录，并在内存中进行解析
+        List<SpatialTemporalRecord> recordList = new ArrayList();
         for (String key : resultKeySet) {
             Result result = server.get(Client.DATA_TABLE, Bytes.toBytes(key));
             for (Cell cell : result.listCells()) {
@@ -206,10 +215,48 @@ public class Client {
                     e.printStackTrace();
                 }
                 if (command.isContainThisPoint(resultRecord)) {
-                    System.out.println("id = " + id +"; value = " + value);
+                    recordList.add(resultRecord);
+                    System.out.println(DataUtil.printTimestamp(resultRecord.getTimestamp()) + ": id = " + id +"; value = " + DataAdaptor.transferSpatialTemporalRecord2TaxiData(resultRecord).toString());
+                    //System.out.println(DataUtil.printTimestamp(resultRecord.getTimestamp()) + ": id = " + id +"; value = " + (resultRecord).toString());
+
                 }
             }
         }
+        System.out.println("total size: " + recordList.size());
+
+        return recordList;
+    }
+
+    public List<SpatialTemporalRecord> get(RangeQueryCommand command, String recordId) {
+        //由于是在客户端进行的模拟缓存，所以这个版本里不考虑内存数据中的额外对待
+        //1. 根据时间范围扫描索引表(范围是放大了的)
+        List<Result> resultList = server.scan(Index.INDEX_TABLE, command.getTimeMin() - Index.TIME_PERIOD, command.getTimeMax() + Index.TIME_PERIOD);
+
+        //2. 解析索引表记录进一步缩小范围
+        Set<String> resultKeySet = parseIndexScanResult(resultList, command);
+
+        //3. 根据读取到的聚合key读取记录，并在内存中进行解析
+        List<SpatialTemporalRecord> recordList = new ArrayList();
+        for (String key : resultKeySet) {
+            Result result = server.get(Client.DATA_TABLE, Bytes.toBytes(key));
+            for (Cell cell : result.listCells()) {
+                String id = Bytes.toString(cell.getQualifier());
+                String value = Bytes.toString(cell.getValue());
+                ObjectMapper objectMapper = new ObjectMapper();
+                SpatialTemporalRecord resultRecord = null;
+                try {
+                    resultRecord = objectMapper.readValue(value, SpatialTemporalRecord.class);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                if (id == recordId) {
+                    System.out.println("*********" + resultRecord.toString());
+                }
+            }
+        }
+        System.out.println("total size: " + recordList.size());
+
+        return recordList;
     }
 
     private Set<String> parseIndexScanResult(List<Result> resultList, RangeQueryCommand command) {
