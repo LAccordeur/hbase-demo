@@ -62,7 +62,7 @@ public class ClientCache {
     }
 
     public boolean isFlush() {
-        if (cacheMap.size() > cacheSize) {
+        if (cacheMap.size() >= cacheSize) {
             return true;
         }
 
@@ -76,11 +76,14 @@ public class ClientCache {
     public void flush() {
         //1. 进行数据分组：每个子区域用子区域内所有点的最相似前缀来标识
         // TODO 由于现阶段采用的客户端缓存模拟，服务端会再进行一次排序，而后续实现时需要考虑到Set的无序性
+        long startTime = System.currentTimeMillis();
         Map<String, Object> resultData = DataUtil.groupSpatialData(cacheMap, this.serverBlockSize);
+        long stopTime = System.currentTimeMillis();
+        System.out.println("Group data consumes " + (stopTime - startTime) / 1000 + " s");
 
         //2. 更新index
-        System.out.println("Time Min: " + DataUtil.printTimestamp(minTimestamp));
-        System.out.println("Time Max: " + DataUtil.printTimestamp(maxTimestamp));
+        System.out.println("Time Min: " + DataUtil.printTimestamp(minTimestamp) + " -- " + minTimestamp);
+        System.out.println("Time Max: " + DataUtil.printTimestamp(maxTimestamp) + " -- " + maxTimestamp);
         Long[] currentTimeIndex = index.update(resultData, minTimestamp, maxTimestamp);
         System.out.println();
         sendToServer(resultData, currentTimeIndex);

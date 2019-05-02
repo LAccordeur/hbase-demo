@@ -17,7 +17,7 @@ public class SpatialRange {
 
     public boolean isOverlap(SpatialRange anotherRange) {
         boolean isLongitudeOverlap = longitudeMax >= anotherRange.longitudeMin && longitudeMin <= anotherRange.longitudeMax;
-        boolean isLatitudeOverlap = latitudeMax >= anotherRange.latitudeMin && latitudeMin < anotherRange.latitudeMax;
+        boolean isLatitudeOverlap = latitudeMax >= anotherRange.latitudeMin && latitudeMin <= anotherRange.latitudeMax;
         if (isLongitudeOverlap && isLatitudeOverlap) {
             return true;
         }

@@ -21,6 +21,8 @@ public class SpatialTemporalRecord {
 
     private String data;
 
+    private String zorderingString;
+
     public SpatialTemporalRecord() {
     }
 
@@ -51,6 +53,13 @@ public class SpatialTemporalRecord {
         return "";
     }
 
+    public String getZorderingString() {
+        return zorderingString;
+    }
+
+    public void setZorderingString(String zorderingString) {
+        this.zorderingString = zorderingString;
+    }
 
     public void setId(String id) {
         this.id = id;

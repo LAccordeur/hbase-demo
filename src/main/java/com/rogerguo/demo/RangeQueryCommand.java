@@ -25,7 +25,7 @@ public class RangeQueryCommand {
     public boolean isContainThisPoint(SpatialTemporalRecord record) {
         boolean isLongitude = record.getLongitude() >= this.longitudeMin && record.getLongitude() <= this.longitudeMax;
         boolean isLatitude = record.getLatitude() >= this.latitudeMin && record.getLatitude() <= this.latitudeMax;
-        boolean isTime = record.getTimestamp() >= this.timeMin && record.getTimestamp() < this.timeMax;
+        boolean isTime = record.getTimestamp() >= this.timeMin && record.getTimestamp() <= this.timeMax;
         return isLatitude && isLongitude && isTime;
     }
 

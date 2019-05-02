@@ -75,9 +75,9 @@ public class Index {
     public Long[] update(Map<String, Object> dataMap, long minTimestamp, long maxTimestamp) {
 
         //TODO bug确认：
-        // 1.第一条时域索引记录的定长时间应该时缓存中最小的时间戳而不是最大的时间戳
-        // 2.每条记录的第一个可变偏移量对应的时间段范围为上条记录的最后一个可变偏移量至当前记录的时间戳
-        // 3.数据实时流入和分析历史数据时的建立索引的差异
+        // 1.第一条时域索引记录的定长时间应该时缓存中最小的时间戳而不是最大的时间戳 fixed
+        // 2.每条记录的第一个可变偏移量对应的时间段范围为上条记录的最后一个可变偏移量至当前记录的时间戳 fixed
+        // 3.数据实时流入和分析历史数据时的建立索引的差异 fixed
         long currentTimestamp;
         if (isStreamData) {
             currentTimestamp = System.currentTimeMillis();
@@ -153,6 +153,7 @@ public class Index {
         //3.生成当前的索引记录
         Put put = new Put(Bytes.toBytes(indexKey));
         String spatialIndexValue = generateSpatialRange(dataMap);
+        System.out.println("Spatial Index: " + spatialIndexValue);
         put.addColumn(Bytes.toBytes(INDEX_FAMILY), Bytes.toBytes(columnKey), Bytes.toBytes(spatialIndexValue));
         server.put(INDEX_TABLE, put);
 

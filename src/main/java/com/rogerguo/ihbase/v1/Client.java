@@ -12,9 +12,7 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.codehaus.jackson.map.ObjectMapper;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -29,12 +27,15 @@ import java.util.*;
  * 假设：
  * 1.达到一次memory flush的时间小于时域索引中的固定时间间隔
  * 2.flush时在创建可变时间偏移量时利用到的时间精度可以保证两次连续的flush的时间戳是不同的
- *
+ * 3.假设每个time period均有数据流入（目前的实现，如果没有这个假设则查询结果可能会遗漏部分数据）
  *
  * 存储形式：所有时间段的数据都放在一个表中
  * 时域设计：将时间信息作为rowkey的一部分，并且采用fixed time period，在当前时间段内再根据数量进行等分
  * 空间域设计：Quad tree聚合
  *
+ * TODO 目前实现中两种可能造成查询结果偏少的情况
+ * 1. 某个time period内没有数据流入且这个time period为查询范围的最后一个time period
+ * 2. 查询范围与缓存中数据有交集（由于缓存中的最后一批数据在实现时未强制flush）
  *
  * @Date : Created on 2019/4/25
  */
@@ -57,6 +58,12 @@ public class Client {
         server.createTable(Client.DATA_TABLE, Client.DATA_FAMILY);
     }
 
+    public Client(String zookeeperUrl, int cacheSize, int serverBlockSize, int timePeriod, boolean isStreamData) {
+        this.clientCache = new ClientCache(zookeeperUrl, cacheSize, serverBlockSize, timePeriod, isStreamData);
+        this.server = new HBaseUtils(zookeeperUrl);
+        server.createTable(Client.DATA_TABLE, Client.DATA_FAMILY);
+    }
+
 
 
 
@@ -64,20 +71,32 @@ public class Client {
 
 
 
-        //RangeQueryCommand command = new RangeQueryCommand(200, 500, 100, 200, 1556520054039L, 1556520054320L);
-        Client client = new Client("127.0.0.1");
-        //client.batchPut();
+        RangeQueryCommand command = new RangeQueryCommand(200, 500, 100, 200, 1556774146683L, 1556774147075L);
+        //空白期时间段
+        RangeQueryCommand command1 = new RangeQueryCommand(10, 999, 10, 900, 1556774147220L, 1556774147225L);
+        //包含空白期的时间段
+        RangeQueryCommand command2 = new RangeQueryCommand(10, 900, 10, 900, 1556774146826L, 1556774147000L);
 
+        int cacheSize = 40;
+        int serverBlockSize = 10;
+        int timePeriod = 400;
+        boolean isStreamData = false;
+        Client client = new Client("127.0.0.1", cacheSize, serverBlockSize, timePeriod, isStreamData);
+        //client.batchPutFromLog();
+        client.scan(command1);
         //client.batchPutTaxiData();
-        long startTime = System.currentTimeMillis();
+        /*long startTime = System.currentTimeMillis();
         client.scan(DataAdaptor.transfer2RangeQueryCommand(-74.003143,-73.995492,40.730136,40.732052, "2010-01-02 15:00:00", "2010-01-02 15:35:00"));
         long endTime = System.currentTimeMillis();
-        System.out.println("Scan consumes " + (endTime - startTime) / 1000.0 + " s" );
+        System.out.println("Scan consumes " + (endTime - startTime) / 1000.0 + " s" );*/
     }
 
     public void batchPutTaxiData() {
         TaxiData taxiData = new TaxiData();
+        long startTime = System.currentTimeMillis();
         List<TaxiData> taxiDataList = taxiData.parseData("dataset/nyc_taxi_data_1_pickup_part_aa");
+        long stopTime = System.currentTimeMillis();
+        System.out.println("Parse Taxi data consumes " + (stopTime - startTime) / 1000 + " s");
         putTaxiData(taxiDataList);
     }
 
@@ -89,14 +108,14 @@ public class Client {
             put(record);
         }
         long stopTime = System.currentTimeMillis();
-        System.out.println("This part consumes " + (stopTime - startTime) / 1000 + " s");
+        System.out.println("Total parts consumes " + (stopTime - startTime) / 1000 + " s");
     }
 
     public void batchPut() {
 
         try {
             //暂时以模拟数据进行替代测试，测试完成后利用nyc-taxi进行测试
-            File file = new File("input_3.log");
+            File file = new File("input_4.log");
             if (!file.exists()) {
                 file.createNewFile();
             }
@@ -107,7 +126,7 @@ public class Client {
                 int longitude = Math.abs(random.nextInt(1000));
                 int latitude = Math.abs(random.nextInt(1000));
                 long timestamp = System.currentTimeMillis();
-                String data = String.valueOf(random.nextLong());
+                String data = String.valueOf(Math.abs(random.nextLong()));
                 SpatialTemporalRecord record = new SpatialTemporalRecord(String.valueOf(id), latitude, longitude, timestamp, data);
                 put(record);
                 writer.write(record.toString());
@@ -118,8 +137,39 @@ public class Client {
             e.printStackTrace();
         }
 
+    }
+
+    public void batchPutFromLog() {
+        try {
+            //暂时以模拟数据进行替代测试，测试完成后利用nyc-taxi进行测试
+            File file = new File("input_4.log");
+            if (!file.exists()) {
+                file.createNewFile();
+            }
+
+            String encoding = "UTF8";
+            if (file.isFile() && file.exists()) {
+                InputStreamReader reader = new InputStreamReader(new FileInputStream(file), encoding);
+                BufferedReader bufferedReader = new BufferedReader(reader);
+                String record = null;
+
+                while ((record = bufferedReader.readLine()) != null) {
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    SpatialTemporalRecord object = objectMapper.readValue(record, SpatialTemporalRecord.class);
+                    put(object);
+                }
+                bufferedReader.close();
+                reader.close();
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
     }
+
+
+
 
     public void put(SpatialTemporalRecord record) {
         //1. 接收数据，放入客户端缓存
@@ -171,42 +221,43 @@ public class Client {
             Result result = resultList.get(j); //Result result : resultList
             List<Cell> cellList = result.listCells();
             long oldTemporalColumnKey = 0;
-            for (int i = 0; i < cellList.size() - 1; i++) {
+            for (int i = 0; i < cellList.size(); i++) {
                 Cell cell = cellList.get(i);
                 long temporalIndexKey = Bytes.toLong(cell.getRow());
                 long temporalColumnKey = Bytes.toLong(cell.getQualifier());
                 String spatialIndexString = Bytes.toString(cell.getValue());
 
+                //TODO 思考索引检索效率是否有提高空间？ 某些情况下可以不用再继续往下检索
                 Map<String, SpatialRange> spatialIndexMap = Index.parseSpatialIndexString(spatialIndexString);
                 Set<String> spatialKeySet = spatialIndexMap.keySet();
                 if (i == 0) {
-                    boolean isOverlop = (command.getTimeMax() > temporalIndexKey) && (command.getTimeMin() < temporalIndexKey + temporalColumnKey);
-                    if (isOverlop) {
+                    boolean isOverlap = (command.getTimeMax() >= temporalIndexKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
+                    if (isOverlap) {
                         // 说明时域上有交集
                         getResultKey(resultKeySet, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
                     }
                 } else if (i == cellList.size() - 1) {
 
-                    boolean isOverlap = (command.getTimeMax() > temporalIndexKey + oldTemporalColumnKey) && (command.getTimeMin() < temporalIndexKey + temporalColumnKey);
+                    boolean isOverlap = (command.getTimeMax() >= temporalIndexKey + oldTemporalColumnKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
                     if (isOverlap) {
                         // 说明时域上有交集
                         getResultKey(resultKeySet, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
                     } else {
                         //最后一个时间偏移量后的空白时间段的记录在下一条索引记录的第一条中
                         if (command.getTimeMax() > temporalIndexKey + temporalColumnKey) {
-                            //判断是否存在下一个索引记录 TODO ##BUG## 下个时间段没有数据时的情况
+                            //判断是否存在下一个索引记录 TODO ##BUG##潜在点 下个时间段没有数据时的情况
                             if (j + 1 < resultList.size()) {
                                 Result nextResult = resultList.get(j + 1);
                                 Cell nextCell = nextResult.listCells().get(0);
-                                String nextSpatialIndexString = Bytes.toString(cell.getValue());
+                                String nextSpatialIndexString = Bytes.toString(nextCell.getValue());
                                 Map<String, SpatialRange> nextSpatialIndexMap = Index.parseSpatialIndexString(nextSpatialIndexString);
-                                Set<String> nextSpatialKeySet = spatialIndexMap.keySet();
+                                Set<String> nextSpatialKeySet = nextSpatialIndexMap.keySet();
                                 getResultKey(resultKeySet, rangeQuerySpatialRange, Bytes.toLong(nextCell.getRow()), Bytes.toLong(nextCell.getQualifier()), nextSpatialIndexMap, nextSpatialKeySet);
                             }
                         }
                     }
                 } else {
-                    boolean isOverlap = (command.getTimeMax() > temporalIndexKey + oldTemporalColumnKey) && (command.getTimeMin() < temporalIndexKey + temporalColumnKey);
+                    boolean isOverlap = (command.getTimeMax() >= temporalIndexKey + oldTemporalColumnKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
                     if (isOverlap) {
                         // 说明时域上有交集
                         getResultKey(resultKeySet, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);

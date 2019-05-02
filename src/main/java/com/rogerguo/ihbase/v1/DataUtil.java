@@ -47,6 +47,10 @@ public class DataUtil {
 
     private static void partition(Set<String> keySet, String prefix, int blockSize, Map<String, Set<String>> groupMap) {
 
+        if (prefix.length() > 64) {
+            return;
+        }
+
         int count = 0;
         Set<String> partitionKeySet = new HashSet<>();
         for (String key : keySet) {
@@ -103,12 +107,12 @@ public class DataUtil {
 
         KeyValuePair result = new KeyValuePair();
 
-        //TODO 数据的归一化问题
-        int latitude = record.getLatitude();
         int longitude = record.getLongitude();
+        int latitude = record.getLatitude();
 
         String key = zordering(longitude, latitude);
 
+        record.setZorderingString(key);
         result.setKey(key);
         result.setValue(record);
 
