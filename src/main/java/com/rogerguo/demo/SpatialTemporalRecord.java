@@ -21,7 +21,7 @@ public class SpatialTemporalRecord {
 
     private String data;
 
-    private String zorderingString;
+    //private String zorderingString;
 
     public SpatialTemporalRecord() {
     }
@@ -51,14 +51,6 @@ public class SpatialTemporalRecord {
             e.printStackTrace();
         }
         return "";
-    }
-
-    public String getZorderingString() {
-        return zorderingString;
-    }
-
-    public void setZorderingString(String zorderingString) {
-        this.zorderingString = zorderingString;
     }
 
     public void setId(String id) {

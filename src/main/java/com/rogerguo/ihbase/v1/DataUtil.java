@@ -113,7 +113,7 @@ public class DataUtil {
 
         String key = zordering(longitude, latitude);
 
-        record.setZorderingString(key);
+        //record.setZorderingString(key);
         result.setKey(key);
         result.setValue(record);
 
@@ -249,7 +249,7 @@ public class DataUtil {
      * @param b
      * @return
      */
-    private static String byteToBit(byte b) {
+    public static String byteToBit(byte b) {
         return ""
                 + (byte) ((b >> 7) & 0x1) + (byte) ((b >> 6) & 0x1)
                 + (byte) ((b >> 5) & 0x1) + (byte) ((b >> 4) & 0x1)

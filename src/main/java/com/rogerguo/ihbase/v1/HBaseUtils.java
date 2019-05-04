@@ -115,8 +115,31 @@ public class HBaseUtils {
         return resultList;
     }
 
+    public Result[] batchGet(String tableName, List<String> rowkeyList) {
+        Result[] results = null;
+        HTable hTable = null;
 
+        List<Get> getList = new ArrayList<>();
+        try {
+            hTable = new HTable(conf, Bytes.toBytes(tableName));
+            for (String key : rowkeyList) {
+                Get get = new Get(Bytes.toBytes(key));
+                getList.add(get);
+            }
+            results = hTable.get(getList);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                hTable.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
 
+        return results;
+
+    }
 
 
     public Result get(String tableName, byte[] rowkey) {

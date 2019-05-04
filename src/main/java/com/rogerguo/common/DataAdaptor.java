@@ -11,6 +11,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Random;
 
 /**
  * description:
@@ -37,8 +38,9 @@ public class DataAdaptor {
      */
     public static SpatialTemporalRecord transferTaxiData2SpatialTemporalRecord(TaxiData taxiData) {
         SpatialTemporalRecord record = new SpatialTemporalRecord();
-
-        record.setId(taxiData.getMedallion() + taxiData.getHackLicense() + taxiData.getDate().getTime());
+        Random random = new Random(System.currentTimeMillis());
+        //record.setId(taxiData.getMedallion() + taxiData.getHackLicense() + taxiData.getDate().getTime());
+        record.setId(taxiData.getMedallion() + Math.abs(random.nextInt(1000)));
         record.setLongitude(bitNormalizedDimension(taxiData.getLongitude(), -180D, 180D, 31));
         record.setLatitude(bitNormalizedDimension(taxiData.getLatitude(), -90D, 90D, 31));
         record.setTimestamp(taxiData.getDate().getTime());

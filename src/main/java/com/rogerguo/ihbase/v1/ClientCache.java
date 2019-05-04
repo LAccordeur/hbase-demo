@@ -86,7 +86,10 @@ public class ClientCache {
         System.out.println("Time Max: " + DataUtil.printTimestamp(maxTimestamp) + " -- " + maxTimestamp);
         Long[] currentTimeIndex = index.update(resultData, minTimestamp, maxTimestamp);
         System.out.println();
+        startTime = System.currentTimeMillis();
         sendToServer(resultData, currentTimeIndex);
+        stopTime = System.currentTimeMillis();
+        System.out.println("Hbase put consumes " + (stopTime - startTime) / 1000.0 + " s");
 
         //3. 清空缓存并校正时间记录
         cacheMap.clear();

@@ -8,6 +8,7 @@ import com.rogerguo.demo.RangeQueryCommand;
 import com.rogerguo.demo.SpatialRange;
 import com.rogerguo.demo.SpatialTemporalRecord;
 import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -65,6 +66,14 @@ public class Client {
         server.createTable(Client.DATA_TABLE, Client.DATA_FAMILY);
     }
 
+    public Client(String zookeeperUrl, int cacheSize, int serverBlockSize, int timePeriod, boolean isStreamData, String dataTable, String indexTable) {
+        Client.DATA_TABLE = dataTable;
+        Index.INDEX_TABLE = indexTable;
+        this.clientCache = new ClientCache(zookeeperUrl, cacheSize, serverBlockSize, timePeriod, isStreamData);
+        this.server = new HBaseUtils(zookeeperUrl);
+        server.createTable(Client.DATA_TABLE, Client.DATA_FAMILY);
+    }
+
 
 
 
@@ -116,7 +125,7 @@ public class Client {
             put(record);
         }
         long stopTime = System.currentTimeMillis();
-        System.out.println("Total parts consumes " + (stopTime - startTime) / 1000 + " s");
+        System.out.println("Transfer and Put taxi data to hbase parts consumes " + (stopTime - startTime) / 1000 + " s");
     }
 
     public void batchPut() {
@@ -195,19 +204,30 @@ public class Client {
     public List<SpatialTemporalRecord> scan(RangeQueryCommand command) {
         //由于是在客户端进行的模拟缓存，所以这个版本里不考虑内存数据中的额外对待
         //1. 根据时间范围扫描索引表(范围是放大了的)
+        long startTime = System.currentTimeMillis();
         List<Result> resultList = server.scan(Index.INDEX_TABLE, command.getTimeMin() - Index.TIME_PERIOD, command.getTimeMax() + Index.TIME_PERIOD);
+        long stopTime = System.currentTimeMillis();
+        System.out.println("Scan index consumes " + (stopTime - startTime) / 1000.0 + " s");
 
         //2. 解析索引表记录进一步缩小范围
-        Set<String> resultKeySet = parseIndexScanResult(resultList, command);
+        startTime = System.currentTimeMillis();
+        List<String> resultKeySet = parseIndexScanResult(resultList, command);
+        stopTime = System.currentTimeMillis();
+        System.out.println("Parse index result consumes " + (stopTime - startTime) / 1000.0 + " s");
+
+        System.out.println("Get size : " + resultKeySet.size());
 
         //3. 根据读取到的聚合key读取记录，并在内存中进行解析
         List<SpatialTemporalRecord> recordList = new ArrayList();
-        for (String key : resultKeySet) {
-            Result result = server.get(Client.DATA_TABLE, Bytes.toBytes(key));
+        startTime = System.currentTimeMillis();
+        Result[] getResultList = server.batchGet(Client.DATA_TABLE, resultKeySet);
+        ObjectMapper objectMapper = new ObjectMapper();
+        for (Result result : getResultList) {
+            //Result result = server.get(Client.DATA_TABLE, Bytes.toBytes(key));
             for (Cell cell : result.listCells()) {
                 String id = Bytes.toString(cell.getQualifier());
                 String value = Bytes.toString(cell.getValue());
-                ObjectMapper objectMapper = new ObjectMapper();
+
                 SpatialTemporalRecord resultRecord = null;
                 try {
                     resultRecord = objectMapper.readValue(value, SpatialTemporalRecord.class);
@@ -216,13 +236,15 @@ public class Client {
                 }
                 if (command.isContainThisPoint(resultRecord)) {
                     recordList.add(resultRecord);
-                    System.out.println(DataUtil.printTimestamp(resultRecord.getTimestamp()) + ": id = " + id +"; value = " + DataAdaptor.transferSpatialTemporalRecord2TaxiData(resultRecord).toString());
+                    //System.out.println(DataUtil.printTimestamp(resultRecord.getTimestamp()) + ": id = " + id +"; value = " + DataAdaptor.transferSpatialTemporalRecord2TaxiData(resultRecord).toString());
                     //System.out.println(DataUtil.printTimestamp(resultRecord.getTimestamp()) + ": id = " + id +"; value = " + (resultRecord).toString());
 
                 }
             }
         }
         System.out.println("total size: " + recordList.size());
+        stopTime = System.currentTimeMillis();
+        System.out.println("Get and Parse data result consumes " + (stopTime - startTime) / 1000.0 + " s");
 
         return recordList;
     }
@@ -233,7 +255,7 @@ public class Client {
         List<Result> resultList = server.scan(Index.INDEX_TABLE, command.getTimeMin() - Index.TIME_PERIOD, command.getTimeMax() + Index.TIME_PERIOD);
 
         //2. 解析索引表记录进一步缩小范围
-        Set<String> resultKeySet = parseIndexScanResult(resultList, command);
+        List<String> resultKeySet = parseIndexScanResult(resultList, command);
 
         //3. 根据读取到的聚合key读取记录，并在内存中进行解析
         List<SpatialTemporalRecord> recordList = new ArrayList();
@@ -259,7 +281,7 @@ public class Client {
         return recordList;
     }
 
-    private Set<String> parseIndexScanResult(List<Result> resultList, RangeQueryCommand command) {
+    /*private Set<String> parseIndexScanResult(List<Result> resultList, RangeQueryCommand command) {
         Set<String> resultKeySet = new LinkedHashSet<>();
 
         SpatialRange rangeQuerySpatialRange = new SpatialRange(command.getLongitudeMin(), command.getLongitudeMax(), command.getLatitudeMin(), command.getLatitudeMax());
@@ -274,40 +296,42 @@ public class Client {
                 long temporalColumnKey = Bytes.toLong(cell.getQualifier());
                 String spatialIndexString = Bytes.toString(cell.getValue());
 
-                //TODO 思考索引检索效率是否有提高空间？ 某些情况下可以不用再继续往下检索
-                Map<String, SpatialRange> spatialIndexMap = Index.parseSpatialIndexString(spatialIndexString);
-                Set<String> spatialKeySet = spatialIndexMap.keySet();
-                if (i == 0) {
-                    boolean isOverlap = (command.getTimeMax() >= temporalIndexKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
-                    if (isOverlap) {
-                        // 说明时域上有交集
-                        getResultKey(resultKeySet, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
-                    }
-                } else if (i == cellList.size() - 1) {
+                if (temporalColumnKey != -1) {
+                    //TODO 思考索引检索效率是否有提高空间？ 某些情况下可以不用再继续往下检索
+                    Map<String, SpatialRange> spatialIndexMap = Index.parseSpatialIndexString(spatialIndexString);
+                    Set<String> spatialKeySet = spatialIndexMap.keySet();
+                    if (i == 0) {
+                        boolean isOverlap = (command.getTimeMax() >= temporalIndexKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
+                        if (isOverlap) {
+                            // 说明时域上有交集
+                            getResultKey(resultKeySet, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
+                        }
+                    } else if (i == cellList.size() - 1) {
 
-                    boolean isOverlap = (command.getTimeMax() >= temporalIndexKey + oldTemporalColumnKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
-                    if (isOverlap) {
-                        // 说明时域上有交集
-                        getResultKey(resultKeySet, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
-                    } else {
-                        //最后一个时间偏移量后的空白时间段的记录在下一条索引记录的第一条中
-                        if (command.getTimeMax() > temporalIndexKey + temporalColumnKey) {
-                            //判断是否存在下一个索引记录 TODO ##BUG##潜在点 下个时间段没有数据时的情况
-                            if (j + 1 < resultList.size()) {
-                                Result nextResult = resultList.get(j + 1);
-                                Cell nextCell = nextResult.listCells().get(0);
-                                String nextSpatialIndexString = Bytes.toString(nextCell.getValue());
-                                Map<String, SpatialRange> nextSpatialIndexMap = Index.parseSpatialIndexString(nextSpatialIndexString);
-                                Set<String> nextSpatialKeySet = nextSpatialIndexMap.keySet();
-                                getResultKey(resultKeySet, rangeQuerySpatialRange, Bytes.toLong(nextCell.getRow()), Bytes.toLong(nextCell.getQualifier()), nextSpatialIndexMap, nextSpatialKeySet);
+                        boolean isOverlap = (command.getTimeMax() >= temporalIndexKey + oldTemporalColumnKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
+                        if (isOverlap) {
+                            // 说明时域上有交集
+                            getResultKey(resultKeySet, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
+                        } else {
+                            //最后一个时间偏移量后的空白时间段的记录在下一条索引记录的第一条中
+                            if (command.getTimeMax() > temporalIndexKey + temporalColumnKey) {
+                                //判断是否存在下一个索引记录 TODO ##BUG##潜在点 下个时间段没有数据时的情况
+                                if (j + 1 < resultList.size()) {
+                                    Result nextResult = resultList.get(j + 1);
+                                    Cell nextCell = nextResult.listCells().get(0);
+                                    String nextSpatialIndexString = Bytes.toString(nextCell.getValue());
+                                    Map<String, SpatialRange> nextSpatialIndexMap = Index.parseSpatialIndexString(nextSpatialIndexString);
+                                    Set<String> nextSpatialKeySet = nextSpatialIndexMap.keySet();
+                                    getResultKey(resultKeySet, rangeQuerySpatialRange, Bytes.toLong(nextCell.getRow()), Bytes.toLong(nextCell.getQualifier()), nextSpatialIndexMap, nextSpatialKeySet);
+                                }
                             }
                         }
-                    }
-                } else {
-                    boolean isOverlap = (command.getTimeMax() >= temporalIndexKey + oldTemporalColumnKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
-                    if (isOverlap) {
-                        // 说明时域上有交集
-                        getResultKey(resultKeySet, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
+                    } else {
+                        boolean isOverlap = (command.getTimeMax() >= temporalIndexKey + oldTemporalColumnKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
+                        if (isOverlap) {
+                            // 说明时域上有交集
+                            getResultKey(resultKeySet, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
+                        }
                     }
                 }
                 oldTemporalColumnKey = temporalColumnKey;
@@ -317,9 +341,71 @@ public class Client {
         }
 
         return resultKeySet;
+    }*/
+
+    private List<String> parseIndexScanResult(List<Result> resultList, RangeQueryCommand command) {
+        List<String> resultKeyList = new ArrayList<>();
+
+        SpatialRange rangeQuerySpatialRange = new SpatialRange(command.getLongitudeMin(), command.getLongitudeMax(), command.getLatitudeMin(), command.getLatitudeMax());
+
+        for (int j = 0; j < resultList.size(); j++) {
+            Result result = resultList.get(j); //Result result : resultList
+            List<Cell> cellList = result.listCells();
+            long oldTemporalColumnKey = 0;
+            for (int i = 0; i < cellList.size(); i++) {
+                Cell cell = cellList.get(i);
+                long temporalIndexKey = Bytes.toLong(cell.getRow());
+                long temporalColumnKey = Bytes.toLong(cell.getQualifier());
+                String spatialIndexString = Bytes.toString(cell.getValue());
+
+                if (temporalColumnKey != -1) {
+                    //TODO 思考索引检索效率是否有提高空间？ 某些情况下可以不用再继续往下检索
+                    Map<String, SpatialRange> spatialIndexMap = Index.parseSpatialIndexString(spatialIndexString);
+                    Set<String> spatialKeySet = spatialIndexMap.keySet();
+                    if (i == 0) {
+                        boolean isOverlap = (command.getTimeMax() >= temporalIndexKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
+                        if (isOverlap) {
+                            // 说明时域上有交集
+                            getResultKey(resultKeyList, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
+                        }
+                    } else if (i == cellList.size() - 1) {
+
+                        boolean isOverlap = (command.getTimeMax() >= temporalIndexKey + oldTemporalColumnKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
+                        if (isOverlap) {
+                            // 说明时域上有交集
+                            getResultKey(resultKeyList, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
+                        } else {
+                            //最后一个时间偏移量后的空白时间段的记录在下一条索引记录的第一条中
+                            if (command.getTimeMax() > temporalIndexKey + temporalColumnKey) {
+                                //判断是否存在下一个索引记录 TODO ##BUG##潜在点 下个时间段没有数据时的情况
+                                if (j + 1 < resultList.size()) {
+                                    Result nextResult = resultList.get(j + 1);
+                                    Cell nextCell = nextResult.listCells().get(0);
+                                    String nextSpatialIndexString = Bytes.toString(nextCell.getValue());
+                                    Map<String, SpatialRange> nextSpatialIndexMap = Index.parseSpatialIndexString(nextSpatialIndexString);
+                                    Set<String> nextSpatialKeySet = nextSpatialIndexMap.keySet();
+                                    getResultKey(resultKeyList, rangeQuerySpatialRange, Bytes.toLong(nextCell.getRow()), Bytes.toLong(nextCell.getQualifier()), nextSpatialIndexMap, nextSpatialKeySet);
+                                }
+                            }
+                        }
+                    } else {
+                        boolean isOverlap = (command.getTimeMax() >= temporalIndexKey + oldTemporalColumnKey) && (command.getTimeMin() <= temporalIndexKey + temporalColumnKey);
+                        if (isOverlap) {
+                            // 说明时域上有交集
+                            getResultKey(resultKeyList, rangeQuerySpatialRange, temporalIndexKey, temporalColumnKey, spatialIndexMap, spatialKeySet);
+                        }
+                    }
+                }
+                oldTemporalColumnKey = temporalColumnKey;
+
+
+            }
+        }
+
+        return resultKeyList;
     }
 
-    private void getResultKey(Set<String> resultKeySet, SpatialRange rangeQuerySpatialRange, long temporalIndexKey, long temporalColumnKey, Map<String, SpatialRange> spatialIndexMap, Set<String> spatialKeySet) {
+    /*private void getResultKey(Set<String> resultKeySet, SpatialRange rangeQuerySpatialRange, long temporalIndexKey, long temporalColumnKey, Map<String, SpatialRange> spatialIndexMap, Set<String> spatialKeySet) {
         for (String spatialKey : spatialKeySet) {
             SpatialRange spatialRange = spatialIndexMap.get(spatialKey);
             if (spatialRange.isOverlap(rangeQuerySpatialRange)) {
@@ -329,7 +415,18 @@ public class Client {
                 resultKeySet.add(queryKey);
             }
         }
-    }
+    }*/
 
+    private void getResultKey(List<String> resultKeyList, SpatialRange rangeQuerySpatialRange, long temporalIndexKey, long temporalColumnKey, Map<String, SpatialRange> spatialIndexMap, Set<String> spatialKeySet) {
+        for (String spatialKey : spatialKeySet) {
+            SpatialRange spatialRange = spatialIndexMap.get(spatialKey);
+            if (spatialRange.isOverlap(rangeQuerySpatialRange)) {
+                //空间域上有交集
+                Long[] temporalIndex = {temporalIndexKey, temporalColumnKey};
+                String queryKey = ClientCache.generateKey(spatialKey, temporalIndex);
+                resultKeyList.add(queryKey);
+            }
+        }
+    }
 
 }

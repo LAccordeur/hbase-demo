@@ -34,8 +34,16 @@ public class HBaseAPITest {
     public static void main(String[] args) {
 
         try {
-            scanRow("taxi_data", "1262415600000390000000011001011100101101111100010111");
-            //scanDataTable("taxi_data");
+
+            String startRow = "126241560000085400000011001011100101101111101011011";
+            String stopRow = "12625020000003540000000110010111001110001000";
+
+            //scanRow("taxi_data", "1262415600000390000000011001011100101101111100010111");
+            scanIndexTable("taxi_data_index");
+            long startTime = System.currentTimeMillis();
+            scanDataTable("taxi_data", startRow, stopRow);
+            long stopTime = System.currentTimeMillis();
+            System.out.println("Scan consumes " + (stopTime - startTime) / 1000.0 + " s");
             //scanIndexTable("taxi_data_index");
         } catch (IOException e) {
             e.printStackTrace();
@@ -123,6 +131,22 @@ public class HBaseAPITest {
                 String id = Bytes.toString(cell.getQualifier());
                 String value = Bytes.toString(cell.getValue());
                 System.out.println("rowkey = " +  rowkey + "    id = " + id + "     spatial temporal value = " + value);
+            }
+        }
+    }
+
+    public static void scanDataTable(String tableName, String startRow, String stopRow) throws IOException {
+        Scan scan = new Scan();
+        scan.setStartRow(Bytes.toBytes(startRow));
+        scan.setStopRow(Bytes.toBytes(stopRow));
+        Table table = conn.getTable(TableName.valueOf(tableName));
+        ResultScanner resultScanner = table.getScanner(scan);
+        for (Result result : resultScanner) {
+            for (Cell cell : result.listCells()) {
+                String rowkey = Bytes.toString(cell.getRow());
+                String id = Bytes.toString(cell.getQualifier());
+                String value = Bytes.toString(cell.getValue());
+                //System.out.println("rowkey = " +  rowkey + "    id = " + id + "     spatial temporal value = " + value);
             }
         }
     }
