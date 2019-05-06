@@ -118,6 +118,28 @@ public class ClientCache {
 
     }
 
+    private void sendToServerOnePointOneRecord(Map<String, Object> dataMap, Long[] currentTimeIndex) {
+        //key -> 子区域id     value -> 该子区域内的数据点list
+        //将数据解析成HBase Put对象，并调用HBase API写入HBase
+        Set<String> keySet = dataMap.keySet();
+        List<Put> putList = new ArrayList<>();
+        for (String key : keySet) {
+            String rowkey = generateKey(key, currentTimeIndex);
+
+            List valueList = (List) dataMap.get(key);
+            for (Object record : valueList) {
+                SpatialTemporalRecord spatialTemporalRecord = (SpatialTemporalRecord) record;
+                Put put = new Put(Bytes.toBytes(rowkey + spatialTemporalRecord.getId()));
+                put.addColumn(Bytes.toBytes(Client.DATA_FAMILY), Bytes.toBytes(""), Bytes.toBytes(spatialTemporalRecord.toString()));
+                putList.add(put);
+            }
+
+        }
+        server.putBatch(Client.DATA_TABLE, putList);
+
+    }
+
+
     public static String generateKey(String spatialKey, Long[] currentTimeIndex) {
 
         long lastIndexKey = currentTimeIndex[0];

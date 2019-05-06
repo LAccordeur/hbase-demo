@@ -343,7 +343,7 @@ public class Client {
         return resultKeySet;
     }*/
 
-    private List<String> parseIndexScanResult(List<Result> resultList, RangeQueryCommand command) {
+    public List<String> parseIndexScanResult(List<Result> resultList, RangeQueryCommand command) {
         List<String> resultKeyList = new ArrayList<>();
 
         SpatialRange rangeQuerySpatialRange = new SpatialRange(command.getLongitudeMin(), command.getLongitudeMax(), command.getLatitudeMin(), command.getLatitudeMax());

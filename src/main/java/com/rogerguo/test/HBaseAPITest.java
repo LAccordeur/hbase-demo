@@ -39,9 +39,10 @@ public class HBaseAPITest {
             String stopRow = "12625020000003540000000110010111001110001000";
 
             //scanRow("taxi_data", "1262415600000390000000011001011100101101111100010111");
-            scanIndexTable("taxi_data_index");
+            //scanIndexTable("taxi_data_index");
             long startTime = System.currentTimeMillis();
-            scanDataTable("taxi_data", startRow, stopRow);
+            //scanDataTable("taxi_data_10000_1000_60", startRow, stopRow);
+            scanDataTable("geomesa_test_nyc_2dtaxi_2ddata_2dpart1_z3_geom_dtg_v6");
             long stopTime = System.currentTimeMillis();
             System.out.println("Scan consumes " + (stopTime - startTime) / 1000.0 + " s");
             //scanIndexTable("taxi_data_index");
@@ -146,7 +147,7 @@ public class HBaseAPITest {
                 String rowkey = Bytes.toString(cell.getRow());
                 String id = Bytes.toString(cell.getQualifier());
                 String value = Bytes.toString(cell.getValue());
-                //System.out.println("rowkey = " +  rowkey + "    id = " + id + "     spatial temporal value = " + value);
+                System.out.println("rowkey = " +  rowkey + "    id = " + id + "     spatial temporal value = " + value);
             }
         }
     }

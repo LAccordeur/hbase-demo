@@ -1,12 +1,12 @@
 package com.rogerguo.ihbase.v1;
 
+import com.rogerguo.demo.RangeQueryCommand;
+import com.rogerguo.demo.SpatialTemporalRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HBaseConfiguration;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.IOException;
 import java.util.*;
@@ -108,6 +108,40 @@ public class HBaseUtils {
                 resultList.add(result);
             }
             return resultList;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return resultList;
+    }
+
+    public List<Result> scan(String tableName, String prefix, RangeQueryCommand command) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        List<Result> resultList = new ArrayList<>();
+        try {
+            HTable hTable = new HTable(conf, tableName);
+            Scan scan = new Scan();
+            scan.setRowPrefixFilter(Bytes.toBytes(prefix));
+            ResultScanner resultScanner = hTable.getScanner(scan);
+            for (Result result : resultScanner) {
+                resultList.add(result);
+                for (Cell cell : result.listCells()) {
+                    String id = Bytes.toString(cell.getQualifier());
+                    String value = Bytes.toString(cell.getValue());
+
+                    SpatialTemporalRecord resultRecord = null;
+                    try {
+                        resultRecord = objectMapper.readValue(value, SpatialTemporalRecord.class);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    if (command.isContainThisPoint(resultRecord)) {
+                        //System.out.println(DataUtil.printTimestamp(resultRecord.getTimestamp()) + ": id = " + id +"; value = " + DataAdaptor.transferSpatialTemporalRecord2TaxiData(resultRecord).toString());
+                        //System.out.println(DataUtil.printTimestamp(resultRecord.getTimestamp()) + ": id = " + id +"; value = " + (resultRecord).toString());
+
+                    }
+                }
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
